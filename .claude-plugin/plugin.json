@@ -1,0 +1,9 @@
+{
+  "name": "india-equity-intraday-skill",
+  "description": "12 Claude skills for NSE India cash-market intraday trade research: scan, news, entry timing, exit planning, a Time Machine replay, risk gate, position sizing with Zerodha costs, manual Kite tickets, alerts, results analysis and delivery/FII-DII context. A research aid: you place every order yourself.",
+  "version": "1.0.0",
+  "author": {"name": "Maghil-Jeevan"},
+  "license": "MIT",
+  "keywords": ["claude-code", "claude-skills", "nse", "india", "intraday", "zerodha", "stock-market", "backtesting", "paper-trading"],
+  "skills": "./"
+}

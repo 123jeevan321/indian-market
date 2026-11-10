@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "india-equity-intraday-skill",
+  "description": "NSE India intraday equity research skills for Claude (cash market only, manual execution)",
+  "owner": {"name": "Maghil-Jeevan"},
+  "plugins": [
+    {
+      "name": "india-equity-intraday-skill",
+      "description": "Twelve Claude skills for NSE India cash-market intraday research: scanner, news, entry, exit, Time Machine, risk, budget with Zerodha costs, manual Kite tickets, alerts, results analyst and delivery/FII-DII flows. You place every order yourself.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}
