@@ -19,14 +19,15 @@ python3 "${CLAUDE_SKILL_DIR}/costs.py" 50 1500 1510         # a round trip's cha
 python3 "${CLAUDE_SKILL_DIR}/costs.py" verify               # compare the built-in rates with zerodha.com/charges
 ```
 
-Config (`trader/config.json`, example in this folder): `budget` 75000, `max_loss_per_trade_inr` 500, `max_daily_loss_inr` 1000, `max_open_positions` 2,
-`max_open_risk_inr` 1000, `min_reward_risk` 1.5, `max_cost_pct_of_reward` 25, `slippage_ticks` 1, `mis_leverage` 1.
+Config (`trader/config.json`, example in this folder): `budget` 75000, `max_loss_per_trade_inr` 500, `max_daily_loss_inr` 2000 (you allow 1,000 to 3,000), `max_trades_per_day` 0 (no cap), `max_open_positions` 2,
+`max_open_risk_inr` 1000, `min_reward_risk` 1.5, `max_cost_pct_of_reward` 25, `slippage_ticks` 1, `mis_leverage` 5.
 
 - Zerodha intraday (read from zerodha.com/charges on 2026-11-10): brokerage min(0.03%, Rs 20) per executed order; STT 0.025% on the sell side; NSE
   transaction charge 0.00307%; SEBI Rs 10 per crore; stamp duty 0.003% on the buy side; GST 18% on brokerage + SEBI + exchange. Rates change:
   run `costs.py verify` and re-read the page before quoting a net number to the user.
-- With Rs 75,000 and no leverage, a Rs 1,330 stock caps at 56 shares even though Rs 500 of risk allows 65: capital binds. Do not assume MIS leverage;
-  check Zerodha's current margin for that stock and only then set `mis_leverage`.
+- MIS (Margin Intraday Square-off) is Zerodha's INTRADAY product; delivery is CNC. Zerodha's margin page lists the MIS leverage per stock (large caps 5x, others lower,
+  e.g. 4.27x): `python3 costs.py leverage RELIANCE` reads it into `trader/leverage.json`, and the LOWER of that and `mis_leverage` applies. Leverage raises buying power, not
+  the rupee risk: quantity still comes from the Rs 500 stop distance. Margins can change during the day. Zerodha charges Rs 50 + 18% GST per order if it auto-squares-off your MIS position.
 - Always present BOTH gross and net. A target whose costs exceed ~25% of the gross reward is refused: that is the "5-10 point scalp is not worth it" rule.
 - Quantity is a whole number rounded down. The max loss shown is at the stop price; a gap can lose more.
 

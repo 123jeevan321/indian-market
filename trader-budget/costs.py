@@ -103,10 +103,49 @@ def verify():
 
 
 RATES_URL = "https://zerodha.com/charges"
+MARGIN_URL = "https://zerodha.com/margin-calculator/Equity/"
+AUTO_SQUAREOFF_FEE = 50.0   # Rs per order + 18 % GST, per Zerodha's support page (read 2026-11-10); max 30,000 qty per order
+
+
+def parse_leverage(html_text):
+    """Zerodha's equity margin page -> {SYMBOL: MIS leverage}. Rows: Scrip | MIS margin % | MIS leverage | CO margin % | CO leverage."""
+    out = {}
+    for row in re.findall(r"<tr[^>]*>(.*?)</tr>", html_text, flags=re.S):
+        cells = [re.sub(r"\s+", " ", _html.unescape(re.sub(r"<[^>]+>", " ", c))).strip()
+                 for c in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", row, flags=re.S)]
+        if len(cells) >= 3 and cells[2].lower().endswith("x"):
+            try:
+                out[cells[0].upper()] = float(cells[2][:-1])
+            except ValueError:
+                pass
+    return out
+
+
+def fetch_leverage(symbols=None, cache="trader/leverage.json"):
+    req = urllib.request.Request(MARGIN_URL, headers={"User-Agent": "Mozilla/5.0"})
+    table = parse_leverage(urllib.request.urlopen(req, timeout=40).read().decode("utf-8", "replace"))
+    if not table:
+        raise RuntimeError("could not read the MIS leverage table from %s" % MARGIN_URL)
+    import os
+    os.makedirs(os.path.dirname(cache) or ".", exist_ok=True)
+    with open(cache, "w", encoding="utf-8") as fh:
+        json.dump({"source": MARGIN_URL, "read": __import__("datetime").date.today().isoformat(), "mis_leverage": table}, fh)
+    return table
 
 
 def main(argv=None):
     a = list(sys.argv[1:] if argv is None else argv)
+    if a and a[0] == "leverage":
+        try:
+            table = fetch_leverage()
+        except Exception as e:
+            print("costs.py: %s" % e, file=sys.stderr)
+            return 1
+        want = [x.upper() for x in a[1:]]
+        for s_ in (want or sorted(table)[:10]):
+            print("%-14s MIS leverage %s" % (s_, ("%gx" % table[s_]) if s_ in table else "not listed (treat as 1x, or not intraday-eligible)"))
+        print("Wrote trader/leverage.json (%d scrips). Zerodha says margins can change during the day; re-read before relying on it." % len(table))
+        return 0
     if a and a[0] == "verify":
         try:
             w = verify()

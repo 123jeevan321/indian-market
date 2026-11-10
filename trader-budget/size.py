@@ -20,8 +20,8 @@ and then the smallest of that and these caps:
 
       position cap   capital x max_position_pct / entry
       max order      max_order_inr / entry
-      cash           capital / entry   (NO leverage is assumed: "mis_leverage": 1. Raise it only after
-                     you have checked Zerodha's current MIS margin for that stock.)
+      cash           capital / entry   ("mis_leverage": 5 is the usual Zerodha MIS figure for large caps; the real figure is
+                     per stock (costs.py leverage SYMBOL) and the lower one wins.)
 
 Prices are NSE prices: the tick is Rs 0.05 ("tick_size"). A long's stop rounds DOWN and a short's
 stop rounds UP to the tick, away from the entry, so rounding never understates the risk.
@@ -48,12 +48,12 @@ import sys
 DEFAULTS = {
     "budget": 75000,
     "cash_buffer_pct": 0,
-    "max_position_pct": 100,
-    "max_order_inr": 75000,
+    "max_position_pct": 500,
+    "max_order_inr": 375000,
     "min_order_inr": 1000,
     "max_loss_per_trade_inr": 500,
-    "max_daily_loss_inr": 1000,
-    "max_trades_per_day": 3,
+    "max_daily_loss_inr": 2000,
+    "max_trades_per_day": 0,
     "max_orders_per_day": 12,
     "min_reward_risk": 1.5,
     "max_open_positions": 2,
@@ -61,7 +61,7 @@ DEFAULTS = {
     "max_cost_pct_of_reward": 25,
     "slippage_ticks": 1,
     "tick_size": 0.05,
-    "mis_leverage": 1,
+    "mis_leverage": 5,
     "require_stop": True,
     "no_entries_before": "09:30",
     "no_entries_after": "14:45",
@@ -73,7 +73,7 @@ DEFAULTS = {
     "paper": True,
     "blocked": [],
     "allow_options": False,
-    "allow_margin": False,
+    "allow_margin": True,
     "allow_short": True,
     "pdt_guard": False,
 }
@@ -401,8 +401,20 @@ def size_trade(plan, cfg, budget=None, limit=None, price=None, cash=None, today=
         limits.append({"name": "max order", "inr": max_order, "per": ref, "shares": shares_for(max_order, ref),
                        "how": "%s / %s" % (money(max_order), _price(ref))})
     lev = max(float(c.get("mis_leverage") or 1), 1.0)
+    lv_doc = None
+    try:
+        with open(c.get("leverage_file", "trader/leverage.json"), encoding="utf-8") as fh:
+            lv_doc = json.load(fh)
+    except (OSError, ValueError):
+        pass
+    if lv_doc and sym in (lv_doc.get("mis_leverage") or {}):
+        lev = min(lev, float(lv_doc["mis_leverage"][sym]))      # Zerodha's own per-stock figure caps your setting
+        cash_note += " (Zerodha lists %gx for %s, read %s)" % (lev, sym, lv_doc.get("read"))
+    elif lv_doc:
+        lev = 1.0
+        cash_note += " (%s is not in Zerodha's MIS leverage table: no leverage)" % sym
     if lev > 1:
-        cash_note += " x %s MIS leverage (you set it; check Zerodha's current margin)" % _num(lev)
+        cash_note += " x %s MIS leverage (run costs.py leverage SYMBOL for Zerodha's current per-stock figure)" % _num(lev)
         available = round(available * lev, 2)
     limits.append({"name": "cash", "inr": available, "per": ref, "shares": shares_for(available, ref),
                    "how": "%s = %s / %s" % (cash_note, money(available), _price(ref))})

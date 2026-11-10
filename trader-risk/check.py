@@ -68,14 +68,14 @@ import re
 import sys
 
 DEFAULTS = {
-    "budget": 75000, "cash_buffer_pct": 0, "max_position_pct": 100, "max_order_inr": 75000,
-    "min_order_inr": 1000, "max_loss_per_trade_inr": 500, "max_daily_loss_inr": 1000, "max_trades_per_day": 3,
+    "budget": 75000, "cash_buffer_pct": 0, "max_position_pct": 500, "max_order_inr": 375000,
+    "min_order_inr": 1000, "max_loss_per_trade_inr": 500, "max_daily_loss_inr": 2000, "max_trades_per_day": 0,
     "max_orders_per_day": 12, "min_reward_risk": 1.5, "require_stop": True,
     "max_open_positions": 2, "max_open_risk_inr": 1000, "max_cost_pct_of_reward": 25,
     "slippage_ticks": 1, "tick_size": 0.05, "exchange": "NSE",
     "no_entries_before": "09:30", "no_entries_after": "14:45", "flat_by": "15:15",
     "broker": "zerodha", "paper": True, "blocked": [],
-    "allow_options": False, "allow_margin": False, "allow_short": True, "pdt_guard": False,
+    "allow_options": False, "allow_margin": True, "allow_short": True, "pdt_guard": False,
 }
 ORDER_FIELDS = ("symbol", "side", "qty", "notional", "type", "time_in_force", "limit_price",
                  "stop_price", "trail_price", "trail_percent", "extended_hours", "client_order_id",

@@ -85,10 +85,10 @@ Implemented and tested offline (42 tests) plus live smoke-tests on real NSE data
 sizing with costs, risk gate, Kite tickets, alerts, flows (bhavcopy), delivery logic, news with graceful NSE fallback.
 
 Open items for the user's decisions or a follow-up:
-1. **Confirm the Rs 1,000 daily max loss** (config default, not yet confirmed) and `max_trades_per_day` (3 by default; the brief did not say).
-2. **Zerodha MIS rules** (leverage per stock, auto-square-off time and fee, SL-M availability, short-sell eligibility list) must be checked in Kite; nothing here assumes them.
+1. ~~Daily loss / trades per day~~ SET by the user: daily loss flexible Rs 1,000-3,000 (default 2,000), no cap on trades per day. Per-trade Rs 500 still to be re-confirmed.
+2. MIS facts read from Zerodha on 2026-11-10: per-stock MIS leverage table (large caps 5x), auto-square-off charge Rs 50 + GST per order. Still to check in Kite: the exact square-off time, SL-M availability, short-sell eligibility.
 3. **ASM/GSM list automation** and the 2027 holiday list (NSE publishes next year's in December).
-4. **VWAP / relative-volume / SMC / volume-profile calculators** over bar data (the framework is in `CLAUDE.md`; the scripts for these indicators are not written yet).
+4. ~~VWAP / relative-volume / volume-profile / impulse~~ DONE in `trader-entry/levels.py` (approximate, from 5-minute bars). Still not scripted: SMC concepts (BOS/CHoCH/FVG/order blocks), ADX/RSI/MACD/Bollinger helpers, true tick-based profiles.
 5. **Order-flow data source** (Kite Connect depth recorder or a vendor), if you want that evidence criterion to count.
 6. **Backtesting engine** (section 7).
 7. A fully live end-to-end paper day on a trading session; today was a holiday, so the live checks used 2026-11-09 data and replays.

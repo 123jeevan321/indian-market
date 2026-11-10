@@ -27,6 +27,17 @@ How to use a result: "triggered" means the CONDITION happened, not that the trad
 late entry: recalculate risk and reward or cancel, do not chase. Combine with market and sector context, VWAP side, relative volume and
 news before any READY call. A short additionally needs: stock allowed for intraday short in Kite, no circuit lock, liquid, and a stop above.
 
+`levels.py` (same folder) computes VWAP (price side, deviation, slope), relative volume (cumulative and last bar vs the same time of day over 20 sessions), previous-day
+high/low/close, gap, opening range, ATR, an APPROXIMATE volume profile (POC / value area) and impulse-like bars:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/levels.py" RELIANCE
+python3 "${CLAUDE_SKILL_DIR}/levels.py" "M&M" --now "2026-11-09 10:40" --json
+```
+
+Prefer impulse entries (large range, high relative volume, close at the extreme, with market and sector) over drifting candles. These are proxies for participation: say
+"impulse-like", never "institutions are buying".
+
 Limits: free Yahoo bars lag and have no bid/ask, depth or aggressor data. This tool never claims order-flow or institutional activity.
 
 ## Safety

@@ -22,12 +22,15 @@ skill is invoked.
 ## Risk rules (confirmed by the user; change only when the user says so)
 
 - Intraday capital Rs 75,000. Max planned loss per trade Rs 500 (confirmed).
-- Max daily loss Rs 1,000: PROPOSED, ask the user to confirm it before relying on it (it is the config default).
-- Max 2 simultaneous positions, max total planned open risk Rs 1,000.
+- Max daily loss: the user allows Rs 1,000 to Rs 3,000 (not a fixed number). Config default Rs 2,000; ask which they want today and never exceed Rs 3,000. When the day's loss reaches it, stop for the day.
+- No cap on the number of trades per day (the daily loss limit and the 2-position limit do the capping). Do not overtrade: quality over count.
+- Max 2 simultaneous positions, max total planned open risk Rs 1,000. Per-trade max loss stays Rs 500 unless the user changes it (ask if they meant a different figure).
 - No averaging down, no martingale, no revenge trading, no bigger size to recover losses, no widening a stop,
   no trade without a stop, no trade whose risk cannot be calculated.
-- `quantity = floor(max_rupee_risk / |entry - stop|)` then capped by capital (no leverage assumed), liquidity
-  and max order value. Check costs (brokerage, STT, exchange, SEBI, GST, stamp duty) and slippage; the Rs 1,000
+- `quantity = floor(max_rupee_risk / |entry - stop|)` then capped by buying power: MIS intraday leverage is up to 5x on large caps (Zerodha's
+  per-stock table, `costs.py leverage SYMBOL`; the lower of your setting and the table applies), liquidity and max order value. Leverage
+  never raises the rupee risk, only the position size the stop allows. Zerodha charges Rs 50 + GST per order if it has to auto-square-off
+  your MIS position (the exact time is in Kite; the user recalls about 15:20): be flat at 15:15. Check costs (brokerage, STT, exchange, SEBI, GST, stamp duty) and slippage; the Rs 1,000
   the user once mentioned is NOT an approved per-trade risk.
 - The user's past loss (about Rs 50,000) is never a reason to take or size a trade. Profit targets (Rs 500 to
   Rs 5,000 a day) are aspirations, not quotas. After a reasonable profit, stop. Never raise risk to reach them.
@@ -86,6 +89,13 @@ feasibility. 90-100 exceptional (only if justified), 80-89 strong, 70-79 moderat
 when the evidence is exceptional and every required confirmation is present, else:
 
 `NO TRADE — INSUFFICIENT CONFIRMATION.`
+
+Prefer IMPULSE entries: a completed 5-minute bar with a large range, volume well above the usual for that time of day, closing at its
+extreme, in the direction of the market and sector, from a clean level (`trader-entry/levels.py` flags impulse-like bars, VWAP side and
+relative volume). Skip slow drifts and extended candles. 'Impulse-like' is a price-and-volume proxy, never proof of an institution.
+
+Bulk/block deals (`trader-flows deals`) are published AFTER the trade, so they are next-day context, not a 5-10 minute trigger; mutual-fund
+holdings are quarterly. Never promise a profit figure (such as Rs 5,000 in 10 minutes) from any of them.
 
 Indicators (ATR, ADX, RSI, MACD, Bollinger, MAs) support a thesis built on price and volume; no trade rests on one
 indicator. Do not stack indicators that say the same thing.

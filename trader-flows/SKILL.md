@@ -15,6 +15,7 @@ argument-hint: "[delivery SYMBOL... | screen | fii-dii]"
 python3 "${CLAUDE_SKILL_DIR}/flows.py" delivery RELIANCE TCS --days 10     # delivery %, volume, close by day
 python3 "${CLAUDE_SKILL_DIR}/flows.py" screen --top 20 --min-turnover 100  # liquid names with unusual volume / delivery (uses trader/universe.txt)
 python3 "${CLAUDE_SKILL_DIR}/flows.py" fii-dii                             # FII/FPI and DII net, if NSE answers
+python3 "${CLAUDE_SKILL_DIR}/flows.py" deals --min-value 500              # latest NSE bulk + block deals (official CSVs)
 ```
 
 Source: `archives.nseindia.com/products/content/sec_bhavdata_full_DDMMYYYY.csv` (official; posted in the evening; holiday dates may carry the previous
@@ -24,6 +25,9 @@ How to read it, and what NOT to claim:
 
 - Delivery % = delivered quantity / traded quantity. Higher than the stock's own average with rising price and volume MAY indicate accumulation; with a falling
   price MAY indicate distribution. These are labels for "possible", never "FIIs bought". Use only: possible accumulation, possible distribution, insufficient evidence.
+- Bulk and block deals (`deals`): official, but published after the trade (bulk deals at the end of the day, block deals that evening). They are next-day context, NOT a
+  signal to ride for 5-10 minutes. Real 9 Nov 2026 data shows why: the same firm appears as buyer and seller of nearly the same size, and a block is a buyer/seller pair at
+  one price. Mutual-fund holdings come from quarterly shareholding patterns and monthly portfolios (context for a swing idea, not an intraday trigger).
 - Intraday delivery % does not exist; this is end-of-day context for tomorrow's watchlist.
 - FII/DII figures are provisional end-of-day totals for the whole market, not per stock. Quote the date and source. If the NSE API refuses, ask the user to paste them.
 - Real order-flow analysis (bid/ask volume, footprint, CVD, stacked imbalances, depth) needs a tick/depth feed (for example Zerodha Kite Connect market-depth websocket, or a

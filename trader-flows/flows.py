@@ -15,6 +15,8 @@ It is a CONTEXT tool, not an order-flow tool:
     python3 flows.py delivery RELIANCE TCS --days 10        # one line per stock per day
     python3 flows.py screen --top 20 --min-turnover 100      # liquid names with unusual delivery / volume
     python3 flows.py fii-dii                                 # FII/FPI and DII cash-market net, if NSE answers
+    python3 flows.py deals --min-value 500                   # latest bulk + block deals (archives bulk.csv / block.csv)
+    python3 flows.py deals RELIANCE INFY --kind bulk
     python3 flows.py delivery INFY --offline tests/fixtures/trader-flows   # saved files, no network
 
 The bhavcopy URL is https://archives.nseindia.com/products/content/sec_bhavdata_full_DDMMYYYY.csv. Files
@@ -236,6 +238,70 @@ def cmd_screen(a):
     return 0 if rows else 1
 
 
+DEALS = {"bulk": "https://archives.nseindia.com/content/equities/bulk.csv",
+         "block": "https://archives.nseindia.com/content/equities/block.csv"}
+
+
+def fetch_deals(kind, offline=None):
+    if offline:
+        p = os.path.join(offline, "%s.csv" % kind)
+        if not os.path.isfile(p):
+            raise FlowError("no %s.csv in %s" % (kind, offline))
+        with open(p, encoding="utf-8", errors="replace") as fh:
+            return fh.read()
+    SLEEP(PAUSE)
+    try:
+        req = urllib.request.Request(DEALS[kind], headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=40) as r:
+            return r.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        e.close()
+        raise FlowError("archives.nseindia.com answered HTTP %d for %s deals" % (e.code, kind))
+    except (urllib.error.URLError, OSError) as e:
+        raise FlowError("could not reach archives.nseindia.com: %s" % getattr(e, "reason", e))
+
+
+def parse_deals(text, kind):
+    rows = []
+    for r in csv.DictReader(io.StringIO(text.lstrip("\ufeff"))):
+        r = {(k or "").strip(): (v or "").strip() for k, v in r.items()}
+        try:
+            qty = float(r.get("Quantity Traded", "0").replace(",", ""))
+            px = float(r.get("Trade Price / Wght. Avg. Price", "0").replace(",", ""))
+        except ValueError:
+            continue
+        rows.append({"kind": kind, "date": r.get("Date"), "symbol": r.get("Symbol", "").upper(), "client": r.get("Client Name"),
+                     "side": r.get("Buy/Sell", "").upper(), "qty": qty, "price": px, "value_lacs": round(qty * px / 1e5, 1)})
+    return rows
+
+
+def cmd_deals(a):
+    rows = []
+    for kind in (["bulk", "block"] if a.kind == "both" else [a.kind]):
+        rows += parse_deals(fetch_deals(kind, a.offline), kind)
+    if a.symbols:
+        want = {s.upper() for s in a.symbols}
+        rows = [r for r in rows if r["symbol"] in want]
+    rows = [r for r in rows if r["value_lacs"] >= a.min_value]
+    rows.sort(key=lambda r: -r["value_lacs"])
+    if a.json:
+        print(json.dumps(rows[:a.top], indent=2))
+        return 0
+    if not rows:
+        print("No bulk/block deals matched.")
+        return 1
+    print("NSE bulk / block deals (official, published AFTER the trades; the file's date is the trade date):")
+    for r in rows[:a.top]:
+        print("  %-10s %-5s %-5s %-10s %12s @ %9.2f = Rs %s lakh  %s" % (
+            r["date"], r["kind"], r["side"], r["symbol"], "{:,.0f}".format(r["qty"]), r["price"], "{:,.0f}".format(r["value_lacs"]),
+            (r["client"] or "")[:44]))
+    print("TIMING WARNING: a deal is published after it is done (bulk deals end of day, block deals the same evening). By the time you "
+          "can see it the price has usually moved, so it is NEXT-DAY CONTEXT, not a 5-10 minute trigger. The buyer can be a fund, a "
+          "trader or an arbitrage desk; a block pair (same quantity, same price, buyer and seller) is often a transfer. Never claim "
+          "the 'institution' will keep buying.")
+    return 0
+
+
 def cmd_fii_dii(a):
     import importlib.util
     here = os.path.dirname(os.path.abspath(__file__))
@@ -265,7 +331,8 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd")
     for name, fn, h in (("delivery", cmd_delivery, "delivery % and volume by day for some stocks"),
                         ("screen", cmd_screen, "liquid stocks with unusual volume / delivery"),
-                        ("fii-dii", cmd_fii_dii, "FII/FPI and DII net cash-market activity")):
+                        ("fii-dii", cmd_fii_dii, "FII/FPI and DII net cash-market activity"),
+                        ("deals", cmd_deals, "NSE bulk and block deals (published after the trade)")):
         p = sub.add_parser(name, help=h)
         p.set_defaults(fn=fn)
         p.add_argument("--offline", metavar="DIR", help="read saved files from DIR instead of the network")
@@ -274,6 +341,11 @@ def main(argv=None):
         if name == "delivery":
             p.add_argument("symbols", nargs="+")
             p.add_argument("--days", type=int, default=10)
+        if name == "deals":
+            p.add_argument("symbols", nargs="*")
+            p.add_argument("--kind", choices=["bulk", "block", "both"], default="both")
+            p.add_argument("--min-value", type=float, default=100.0, help="deal value in lakh rupees (default 100 = Rs 1 crore)")
+            p.add_argument("--top", type=int, default=25)
         if name == "screen":
             p.add_argument("--days", type=int, default=10, help="days to average over")
             p.add_argument("--top", type=int, default=20)

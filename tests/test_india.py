@@ -206,10 +206,11 @@ class Sizing(unittest.TestCase):
         d = self.s.DEFAULTS
         self.assertEqual(d["budget"], 75000)
         self.assertEqual(d["max_loss_per_trade_inr"], 500)
-        self.assertEqual(d["max_daily_loss_inr"], 1000)
+        self.assertEqual(d["max_daily_loss_inr"], 2000)   # the user allows 1,000 to 3,000
+        self.assertEqual(d["max_trades_per_day"], 0)      # 0 = no cap on the number of trades
         self.assertEqual(d["max_open_positions"], 2)
         self.assertEqual(d["max_open_risk_inr"], 1000)
-        self.assertEqual(d["mis_leverage"], 1)          # no leverage assumed
+        self.assertEqual(d["mis_leverage"], 5)            # usual Zerodha MIS figure; per-stock table can lower it
         self.assertEqual(d["flat_by"], "15:15")
 
     def test_quantity_is_risk_over_stop_distance_rounded_down(self):
@@ -224,10 +225,16 @@ class Sizing(unittest.TestCase):
         self.assertEqual(r["side"], "sell")
         self.assertEqual(r["qty"], 100)
 
-    def test_capital_caps_the_quantity_with_no_leverage(self):
-        r = self.s.size_trade(self.plan(entry=1330.0, stop=1322.4, target=1345.2), self.cfg, limit=1330.0)
+    def test_capital_caps_the_quantity_without_leverage(self):
+        r = self.s.size_trade(self.plan(entry=1330.0, stop=1322.4, target=1345.2), {"mis_leverage": 1, "max_position_pct": 100,
+                                                                                   "max_order_inr": 75000}, limit=1330.0)
         self.assertEqual(r["qty"], 56)                  # 75,000 / 1,330 beats 500 / 7.6 = 65
         self.assertEqual(r["bound_by"], "position cap")
+
+    def test_with_5x_leverage_the_risk_rule_binds(self):
+        r = self.s.size_trade(self.plan(entry=1330.0, stop=1322.4, target=1345.2), self.cfg, limit=1330.0)
+        self.assertEqual(r["qty"], 65)                  # floor(500 / 7.6)
+        self.assertEqual(r["bound_by"], "max loss")
 
     def test_tiny_target_is_refused_because_of_costs(self):
         # risk 2.00, target 2.00 away: the target pays ~Rs 100 on 50 shares and costs are far over 25 % of it
@@ -321,6 +328,61 @@ class FlowsData(unittest.TestCase):
         series = rows[0][1]
         self.assertEqual(series[0]["deliv_pct"], 51.98)
         self.assertEqual(series[1]["deliv_pct"], 66.83)
+
+
+class LeverageAndDeals(unittest.TestCase):
+    def test_leverage_table_parse(self):
+        c = load("trader-budget", "costs")
+        html = ("<table><tr><td>Scrip</td><td>MIS/CO</td><td>CO</td></tr><tr><td>Margin %</td><td>Leverage</td></tr>"
+                "<tr><td>INFY</td><td>20%</td><td>5x</td><td>20%</td><td>5x</td></tr>"
+                "<tr><td>20MICRONS</td><td>23.41%</td><td>4.27x</td><td>23.41%</td><td>4.27x</td></tr></table>")
+        self.assertEqual(c.parse_leverage(html), {"INFY": 5.0, "20MICRONS": 4.27})
+
+    def test_deals_parse(self):
+        f = load("trader-flows", "flows")
+        text = ("Date,Symbol,Security Name,Client Name,Buy/Sell,Quantity Traded,Trade Price / Wght. Avg. Price,Remarks\n"
+                "09-NOV-2026,AARTIDRUGS,Aarti Drugs Ltd.,QE SECURITIES LLP,BUY,885686,497.86,-\n")
+        rows = f.parse_deals(text, "bulk")
+        self.assertEqual(rows[0]["symbol"], "AARTIDRUGS")
+        self.assertEqual(rows[0]["side"], "BUY")
+        self.assertAlmostEqual(rows[0]["value_lacs"], 4409.5, places=1)
+
+
+class Levels(unittest.TestCase):
+    """SYNTHETIC session: flat morning at 1000 with normal volume, then an impulse bar up on big volume."""
+
+    def setUp(self):
+        self.L = load("trader-entry", "levels")
+
+    def doc(self):
+        days = [datetime.date(2026, 11, d) for d in (2, 3, 4, 5, 6, 9, 11)]       # 11 Nov is the 'today' under test
+        bars_by_day = {}
+        for d in days:
+            bars = [(1000, 1001, 999, 1000, 1000)] * 8
+            if d == days[-1]:
+                bars[6] = (1000, 1010, 1000, 1009, 5000)                         # impulse: range 10 vs 2, volume 5x
+            bars_by_day[d] = bars
+        ts, o, h, l, c, v = [], [], [], [], [], []
+        for d, bars in bars_by_day.items():
+            t0 = int((datetime.datetime.combine(d, datetime.time(9, 15)) - datetime.timedelta(hours=5.5)
+                      - datetime.datetime(1970, 1, 1)).total_seconds())
+            for i, b in enumerate(bars):
+                ts.append(t0 + 300 * i); o.append(b[0]); h.append(b[1]); l.append(b[2]); c.append(b[3]); v.append(b[4])
+        return {"chart": {"result": [{"timestamp": ts, "indicators": {"quote": [{"open": o, "high": h, "low": l, "close": c, "volume": v}]}}]}}
+
+    def test_vwap_relative_volume_and_impulse(self):
+        now = self.L.ist_to_utc(datetime.datetime(2026, 11, 11, 9, 55))        # 8 bars have completed
+        r = self.L.compute(self.doc(), now)
+        self.assertEqual(r["bars"], 8)
+        self.assertEqual(r["vwap"]["side"], "below")      # the last bar went back to 1000, under the spike-lifted VWAP
+        self.assertGreater(r["relative_volume"]["cumulative_x"], 1.3)
+        self.assertEqual(r["levels"]["prev_high"], 1001)
+        self.assertEqual([i["direction"] for i in r["impulse_last_6_bars"]], ["up"])
+        self.assertEqual(r["profile_today"]["approximate"], True)
+
+    def test_vwap_is_volume_weighted(self):
+        bars = [{"h": 10, "l": 10, "c": 10, "v": 1}, {"h": 20, "l": 20, "c": 20, "v": 3}]
+        self.assertAlmostEqual(self.L.vwap_series(bars)[-1], 17.5)
 
 
 class RepoShape(unittest.TestCase):
