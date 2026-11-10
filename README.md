@@ -20,8 +20,8 @@ does not change that. Nothing here guarantees profit, and every setup is **unval
 ## Install
 
 ```bash
-git clone https://github.com/123jeevan321/india-equity-intraday-skill.git
-cd india-equity-intraday-skill
+git clone https://github.com/123jeevan321/indian-market.git
+cd indian-market
 python -m unittest discover -s tests        # offline tests
 mkdir trader && cp trader-budget/config.example.json trader/config.json   # your rules
 ```
