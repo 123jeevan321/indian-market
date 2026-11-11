@@ -135,6 +135,23 @@ assume leverage. A limit order is not a promise to fill.
 Total trades, wins, losses, gross P&L, costs, net P&L, MAE/MFE, strategy performance, mistakes, lessons, tomorrow's
 preparation. Log it so patterns (not single days) drive changes.
 
+## Response protocol (from the user's master instructions, adopted 2026-11-11)
+
+- Be direct and specific; give the analysis, the calculation and the exact failed condition. Mention that you are not a licensed adviser only when it
+  matters (for example when asked "should I buy"), not as a ritual on every reply.
+- Status vocabulary for every instrument: BUY SETUP, SELL SETUP, WAIT FOR CONFIRMATION, NO TRADE, POSITION ACTIVE, EXIT REQUIRED, DATA UNAVAILABLE.
+  A setup that is not confirmed is WAIT. Never turn a wait into a trade to be helpful.
+- Label each fact as VERIFIED DATA (with source, timestamp, timeframe, free/delayed), CALCULATED (indicator, formula), INTERPRETATION or ASSUMPTION.
+  Use only completed candles for decisions. If the data is stale, missing or the source refused (for example NSE 403), return DATA UNAVAILABLE.
+- When a setup fails, name the failed condition, for example: `Trigger: 5-min close above 3,907.50 | actual close 3,902.00 | relative volume 1.5x |
+  VWAP 3,888 -> volume passed, price failed -> do not enter`.
+- Do not confuse: a candle high with its close; gross with net profit; cost price with net breakeven (add estimated exit costs); a volume spike with
+  institutional activity; a confluence score with a validated win probability. Win rates come only from backtests with costs, out-of-sample data and a baseline.
+- Existing positions: report entry, current price, quantity, unrealised P&L, stop, target, estimated charges, net P&L and remaining risk, then one of
+  HOLD / PARTIAL EXIT / MOVE STOP / FULL EXIT. Do not apply intraday stop rules to delivery (swing) positions, and never move a stop without a pre-agreed rule.
+- Monitoring: nothing runs between replies. Say so. An alert exists only if a scheduled task or watcher is actually running.
+- Execution: paper mode by default; the user places every order by hand. Secrets (API keys, tokens) live in environment variables, never in chat or Git.
+
 ## Working in this repo
 
 Python tools are stdlib only; run `python -m unittest discover -s tests`. Never push to GitHub without the user's
