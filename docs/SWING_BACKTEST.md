@@ -164,3 +164,16 @@ Limits: survivorship bias (today's index members); Yahoo daily bars (split-adjus
 (IS +Rs 195/trade on 39 trades, OOS +Rs 120/trade on 77 trades), but its confidence intervals include zero and the RS-filtered RANDOM entry was
 similar in-sample (+Rs 142). It is a lead for paper trading only, not a validated strategy. Everything else stays REJECT.
 
+## Entry timing check for the lead (sweep + RS, 10-day hold, Scenario A)
+
+Daily bars can test two timings: buying near the signal day's CLOSE (about 15:00-15:15) or at the NEXT day's OPEN. A 9:45-10:30 entry needs intraday bars and is NOT tested.
+
+| setup | trades | win | avg win / loss Rs | expectancy Rs (95% CI) | avg R | PF | total Rs | max DD Rs | worst losing streak | avg week Rs | Sharpe (weekly) | weeks >=5k / >=10k / <0 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| sweep+RS 10d, entry open, IS | 39 | 64.1% | 1004 / -1250 | +195 (-194..+588) | +0.13 | 1.43 | 7593 | 8463 | 5 | +76 | 0.60 | 0% / 0% / 9% |
+| sweep+RS 10d, entry open, OOS | 77 | 46.8% | 1541 / -1127 | +120 (-204..+496) | +0.08 | 1.20 | 9236 | 9130 | 6 | +88 | 0.41 | 1% / 0% / 23% |
+| sweep+RS 10d, entry close, IS | 40 | 62.5% | 1020 / -1235 | +175 (-241..+589) | +0.11 | 1.38 | 6986 | 9262 | 6 | +69 | 0.52 | 1% / 0% / 10% |
+| sweep+RS 10d, entry close, OOS | 76 | 46.1% | 1493 / -1162 | +60 (-280..+400) | +0.02 | 1.10 | 4587 | 12756 | 6 | +44 | 0.21 | 0% / 0% / 23% |
+
+
+**Timing finding:** next-day open did slightly better than the signal-day close out of sample (+Rs 120 vs +Rs 60 per trade); both intervals include zero.

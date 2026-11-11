@@ -35,6 +35,27 @@ How to present a swing call: use the TRADE PLAN format in `CLAUDE.md` with the s
 it. If the setup's out-of-sample expectancy is not positive, the answer is REJECT, whatever the chart looks like. Before any call check
 results/board-meeting dates (`trader-news`), NIFTY regime and sector, and say if the stock already moved more than 6 % in 5 days (chasing).
 
+## Daily routine and the trade card
+
+- **After the close (from 15:35 IST):** `swing.py scan --setups sweep --rs-min 0.8 --watch MCX,BEL,...` on the completed daily bar. This is when
+  swing signals exist; nothing intraday changes a daily signal.
+- **Next session:** the tested entry is the next day's OPEN (or the signal day's close, see the timing table in docs/SWING_BACKTEST.md). Waiting until
+  9:45-10:30 to see the open settle, or buying at 14:30-15:15, is a reasonable manual refinement, but it is NOT what was backtested: say so. Skip the
+  trade if the price has already moved more than 1 x ATR above the planned entry (chasing).
+- **Card (always this shape):**
+
+```
+SWING [LONG] SYMBOL | setup: sweep+RS (paper-only lead) | data: Yahoo daily, bar DATE
+Entry range: X - Y          Stop-loss: Z (structural: sweep low - 0.1 ATR)
+Target 1: A (+a%, 1.5R) - book half, stop to entry     Target 2: B (+b%, 3R)     Time exit: close of day 10
+Quantity: N (Rs value)      Max loss incl. costs: Rs <=1,500      Net at T1: Rs ...
+Why: <the exact conditions that fired>   Why not: <regime, extension, event risk>
+Decision: PAPER / REJECT (until the setup passes out-of-sample)
+```
+
+Targets come from R multiples of the structural stop, not a fixed 2.5-5 %. The card shows the percentage each target means; if T1 is under
+about 2 % the move is too small for the delivery costs and the trade is skipped.
+
 ## Safety
 
 - Research and tooling. The user places every order in Kite. Nothing here places, modifies or cancels an order.

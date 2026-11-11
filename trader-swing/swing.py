@@ -256,11 +256,11 @@ def capped_qty(entry, risk, risk_inr, cash):
     return int(max(0, min((risk_inr - 16) // per_share, cash // entry)))
 
 
-def make_trade(b, t, struct_stop, risk_inr, cash, hold=5, mode="ladder"):
+def make_trade(b, t, struct_stop, risk_inr, cash, hold=5, mode="ladder", entry_at="open"):
     if t + 1 >= len(b):
         return None
     atr = b[t]["atr"]
-    entry = tick(b[t + 1]["o"] + TICK, up=True)
+    entry = tick((b[t]["c"] if entry_at == "close" else b[t + 1]["o"]) + TICK, up=True)
     stop = tick(struct_stop - 0.1 * atr)
     if entry - stop < 1.0 * atr:
         stop = tick(entry - 1.0 * atr)
@@ -276,7 +276,7 @@ def make_trade(b, t, struct_stop, risk_inr, cash, hold=5, mode="ladder"):
     exit_day = last
     for k in range(t + 1, last + 1):
         x = b[k]
-        o = x["o"] if k > t + 1 else entry
+        o = x["o"] if (k > t + 1 or entry_at == "close") else entry
         if o <= cur:                                   # gapped through the stop
             legs.append((rem, o - TICK, k)); rem = 0; exit_day = k; break
         if x["l"] <= cur:
@@ -298,7 +298,7 @@ def make_trade(b, t, struct_stop, risk_inr, cash, hold=5, mode="ladder"):
     for i, (q, px, k) in enumerate(legs):
         c = COSTS.delivery_costs(q, entry, px, sells=1)
         cost += c["charges"]
-    return {"entry_day": b[t + 1]["d"], "exit_day": b[exit_day]["d"], "entry": entry, "stop": stop, "qty": qty, "risk": risk,
+    return {"entry_day": b[t]["d"] if entry_at == "close" else b[t + 1]["d"], "exit_day": b[exit_day]["d"], "entry": entry, "stop": stop, "qty": qty, "risk": risk,
             "gross": gross, "costs": cost, "net": gross - cost, "r": (gross - cost) / (qty * risk), "value": qty * entry,
             "days_held": len([1 for k in range(t + 1, max(days) + 1)]), "hit_t1": took or any(px >= t1 for _, px, _ in legs)}
 
@@ -354,7 +354,7 @@ def signals_for(data, setup, seed=7, rs=None, rs_min=0.0):
     return out
 
 
-def portfolio(data, sigs, capital, risk_inr, max_pos, mode="ladder", hold=5):
+def portfolio(data, sigs, capital, risk_inr, max_pos, mode="ladder", hold=5, entry_at="open"):
     """Chronological portfolio: highest relative volume first; at most max_pos open; cash-limited; one position per stock."""
     by_day = {}
     for sig in sigs:
@@ -372,7 +372,7 @@ def portfolio(data, sigs, capital, risk_inr, max_pos, mode="ladder", hold=5):
         for sig in sorted(by_day[d], key=lambda z: -z[4]):
             if len(open_pos) >= max_pos or any(p["symbol"] == sig[1] for p in open_pos):
                 continue
-            tr = make_trade(data[sig[1]], sig[2], sig[3], risk_inr, cash, hold=hold, mode=mode)
+            tr = make_trade(data[sig[1]], sig[2], sig[3], risk_inr, cash, hold=hold, mode=mode, entry_at=entry_at)
             if not tr:
                 continue
             tr["symbol"], tr["signal_day"] = sig[1], d
@@ -480,6 +480,13 @@ def cmd_backtest(a):
         tr = portfolio(data, signals_for(data, setup, rs=rs, rs_min=0.8), 100000, 1500, a.max_pos, hold=10)
         out.append(fmt(stats([t for t in tr if t["signal_day"] < cut], "%s+RS 10d IS" % setup)))
         out.append(fmt(stats([t for t in tr if t["signal_day"] >= cut], "%s+RS 10d OOS" % setup)))
+    out += ["", "## Entry timing check for the lead (sweep + RS, 10-day hold, Scenario A)", "",
+            "Daily bars can test two timings: buying near the signal day's CLOSE (about 15:00-15:15) or at the NEXT day's OPEN. A 9:45-10:30 "
+            "entry needs intraday bars and is NOT tested.", "", HEAD]
+    for when in ("open", "close"):
+        tr = portfolio(data, signals_for(data, "sweep", rs=rs, rs_min=0.8), 100000, 1500, a.max_pos, hold=10, entry_at=when)
+        out.append(fmt(stats([t for t in tr if t["signal_day"] < cut], "sweep+RS 10d, entry %s, IS" % when)))
+        out.append(fmt(stats([t for t in tr if t["signal_day"] >= cut], "sweep+RS 10d, entry %s, OOS" % when)))
     out += ["", "Limits: survivorship bias (today's index members); Yahoo daily bars (split-adjusted, not dividend-adjusted); a bar touching stop and "
             "target counts as the stop; signals are ranked by relative volume when more appear than open slots; no news/results filter; the CI "
             "assumes independent trades. FAILED/UNTESTED concepts are listed in the strategy document."]
@@ -523,8 +530,10 @@ def cmd_scan(a):
     for b in list(data.values()) + ([nifty] if nifty else []):
         enrich(b)
     reg = regime_map(nifty) if nifty else {}
+    rs = rs_ranks(data, nifty) if nifty else {}
     now_ist = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(hours=5.5)
     rows = []
+    watch = {w.strip().upper(): None for w in (a.watch or "").split(",") if w.strip()}
     for s, b in data.items():
         t = len(b) - 1
         if b[t]["d"] == now_ist.date() and now_ist.time() < datetime.time(15, 35):
@@ -535,7 +544,17 @@ def cmd_scan(a):
             if k == t:
                 break
         x = b[t]
+        rsp = rs.get((s, x["d"]))
+        if s in watch:
+            lo20 = min(p["l"] for p in b[t - 20:t])
+            fired = signal(b, t, "sweep", {"swing_highs": [], "swing_lows": [], "fvgs": []}) is not None
+            watch[s] = ("%-11s %s close %.2f | RS pct %s | prior 20-day low %.2f (%+.1f%% away) | today's low %.2f | %s EMA200 (%.2f) | rvol %.1fx | "
+                        "sweep fired: %s" % (s, x["d"], x["c"], ("%.0f" % (100 * rsp)) if rsp is not None else "n/a", lo20,
+                                             100 * (x["c"] / lo20 - 1), x["l"], "above" if x["c"] > x["e200"] else "below", x["e200"],
+                                             x["rvol"], "YES" if fired else "no"))
         if x["avgval"] < 25e7 or x["c"] < 100:
+            continue
+        if a.rs_min and (rsp is None or rsp < a.rs_min):
             continue
         for setup in (a.setups.split(",") if a.setups else SETUPS):
             st = signal(b, t, setup, state)
@@ -544,12 +563,16 @@ def cmd_scan(a):
             p = plan(b, t, st, a.risk, a.capital)
             if p:
                 ext = 100 * (x["c"] / b[t - 5]["c"] - 1)
-                rows.append(dict(p, symbol=s, setup=setup, close=x["c"], date=x["d"].isoformat(), rvol=x["rvol"], ext5=ext,
+                rows.append(dict(p, rs_pct=rsp, symbol=s, setup=setup, close=x["c"], date=x["d"].isoformat(), rvol=x["rvol"], ext5=ext,
                                  regime=reg.get(nifty[-1]["d"] if nifty else None)))
     rows.sort(key=lambda r: (r["ext5"] > 6, -r["rvol"]))
     nreg = reg.get(nifty[-2]["d"]) if nifty else None
     print("Swing scan (long only) from the last COMPLETED daily bar; NIFTY regime: %s. Data: Yahoo daily (unofficial). %d symbols, %d missing." % (
         nreg, len(data), len(missing)))
+    if watch:
+        print("Watchlist status (sweep = trades below the prior 20-day low and closes back above it, top 40% of range, rvol >= 1.2, close > EMA200):")
+        for w, line in watch.items():
+            print("  " + (line or "%s: no data" % w))
     if not rows:
         print("NO TRADE: no setup fired on the last completed bar.")
         return 1
@@ -589,6 +612,8 @@ def main(argv=None):
     p.add_argument("--cache-live", default="trader/cache/swing-live"); p.add_argument("--universe"); p.add_argument("--symbols")
     p.add_argument("--setups"); p.add_argument("--risk", type=float, default=1500); p.add_argument("--capital", type=float, default=100000)
     p.add_argument("--top", type=int, default=10)
+    p.add_argument("--rs-min", type=float, default=0.0, help="relative-strength percentile floor, e.g. 0.8 = top 20%%")
+    p.add_argument("--watch", help="comma list of symbols to report status for, e.g. MCX,BEL")
     p = sub.add_parser("size"); p.set_defaults(fn=cmd_size)
     p.add_argument("--entry", type=float, required=True); p.add_argument("--stop", type=float, required=True)
     p.add_argument("--risk", type=float, default=1500); p.add_argument("--capital", type=float, default=100000)
