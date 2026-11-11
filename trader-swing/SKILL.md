@@ -56,6 +56,12 @@ Decision: PAPER / REJECT (until the setup passes out-of-sample)
 Targets come from R multiples of the structural stop, not a fixed 2.5-5 %. The card shows the percentage each target means; if T1 is under
 about 2 % the move is too small for the delivery costs and the trade is skipped.
 
+## 2-Stock Sector-Split Rotation (BTST, 1-2 days)
+
+`momentum_rotator.py scan --angel` (from 14:45 IST, Angel One live snapshot) or `scan` after the close; `momentum_rotator.py backtest --offline`.
+Card: symbol + industry, LTP/time/source, day gain, RVOL, close position in range, buy range, stop (-1.5 %), book profit (+3 %), day-2 time exit,
+quantity, max loss incl. costs, net at target, decision. Status: FAILED the backtest gate on 2026-11-11 -> PAPER.
+
 ## Safety
 
 - Research and tooling. The user places every order in Kite. Nothing here places, modifies or cancels an order.

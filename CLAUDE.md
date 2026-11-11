@@ -167,6 +167,14 @@ Separate from the intraday rules: delivery (CNC), 1-5 days, LONG ONLY, Rs 1,500 
 backtest (docs/SWING_BACKTEST.md) found NO setup with positive out-of-sample expectancy or better than random entries, so swing calls are REJECT /
 paper-only until a setup passes. Say this when asked for a swing pick, then show the scan and the numbers anyway.
 
+## 2-Stock Sector-Split Rotation (BTST, added 2026-11-11)
+
+Capital Rs 2 lakh: max 2 legs of <= Rs 1 lakh in different NSE Industry groups, loss per leg <= Rs 1,500 INCLUDING delivery costs (about
+Rs 87,000 leg at a 1.5 % stop), hold 1-2 sessions, weekly pause at -Rs 4,000. Go-live gate: BUY cards only for a variant with positive IS and
+OOS expectancy that beats random entries. The 2026-11-11 backtest (docs/MOMENTUM_BACKTEST.md) FAILED the gate, so rotation cards are PAPER.
+Scan: `python trader-swing/momentum_rotator.py scan --angel` from 14:45 IST (Angel One live snapshot, read-only). The user wants cards in chat,
+not commands: run the tools yourself and post the card.
+
 ## Working in this repo
 
 Python tools are stdlib only; run `python -m unittest discover -s tests`. Never push to GitHub without the user's
