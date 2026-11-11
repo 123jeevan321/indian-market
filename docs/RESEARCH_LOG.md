@@ -31,3 +31,12 @@ See docs/ZERODHA_INTEGRATION.md. Verified read-only: quote (5-level depth, VWAP,
 continuous futures DAILY OI history, option chain. Not available: trade tape, historical depth, streaming. Its live fields matched Angel One
 exactly, so the Angel recorder stays the order-flow source; Zerodha adds futures OI history, option chains and cross-checks.
 Round 8 starts with step 1 of the plan in that document.
+
+## 2026-11-12: Round 8 complete (delivery % and futures OI)
+
+Data: research/fetch_nse.py downloaded 1,233 delivery days and 1,234 F&O days (trader/cache/nse, git-ignored). Features and tests in
+research/round8.py (features, stageA, incremental, stageB, hypothesis, intraday). Report: docs/ROUND8_DELIVERY_OI.md.
+Findings: delivery % and futures OI are significant RELATIVE signals (26 Bonferroni passes; OI lifts next-day IC 0.043 -> 0.062), but no
+long-only trade beats costs. User hypothesis (delivery > 65 % + long build-up): negative net at 1-5 days, edge gone in 2025-26.
+Next: forward paper-track the two candidates in the report; start the Angel recorder for order-flow features; consider a
+market-neutral design only if F&O hedging is ever allowed (currently excluded).
