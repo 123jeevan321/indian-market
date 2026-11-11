@@ -152,6 +152,14 @@ preparation. Log it so patterns (not single days) drive changes.
 - Monitoring: nothing runs between replies. Say so. An alert exists only if a scheduled task or watcher is actually running.
 - Execution: paper mode by default; the user places every order by hand. Secrets (API keys, tokens) live in environment variables, never in chat or Git.
 
+## Analysis-first policy (user instruction, 2026-11-11)
+
+A disclaimer never replaces the work. For every stock call: analyse the available data, trend and structure, test the applicable setup against the
+backtest evidence (say plainly when there is none), calculate entry, stop, targets, quantity and costs (gross and net), show the evidence, and return
+BUY, SELL, WAIT or REJECT (the setup statuses above map to these). If the evidence supports the setup, give the calculated call; if not, return WAIT and name
+the failed conditions. At most one short risk line, and only where it changes the decision (for example a stop that can gap, a cap that is exceeded). Never
+invent prices, backtests, data or confidence, and never present a probability as certain.
+
 ## Working in this repo
 
 Python tools are stdlib only; run `python -m unittest discover -s tests`. Never push to GitHub without the user's
