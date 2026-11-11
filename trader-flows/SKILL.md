@@ -22,6 +22,20 @@ python3 "${CLAUDE_SKILL_DIR}/flows.py" deals --min-value 500              # late
 Source: `archives.nseindia.com/products/content/sec_bhavdata_full_DDMMYYYY.csv` (official; posted in the evening; holiday dates may carry the previous
 session's data, which the tool detects and skips). Cached under `trader/cache/`.
 
+## Real tick and depth data (Angel One, read-only)
+
+`angel_recorder.py` records Angel One SmartAPI SnapQuote ticks (LTP, last traded qty, day volume, total buy/sell qty, best 5 bids and asks) to
+`trader/ticks/DATE/SYMBOL.jsonl`, and `flow` turns them into per-minute ESTIMATED buy/sell volume, delta, cumulative delta and top-5 book imbalance.
+It never places orders (a test enforces it). Credentials only in env vars: ANGEL_API_KEY, ANGEL_CLIENT_CODE, ANGEL_PIN, ANGEL_TOTP_SECRET.
+
+```bash
+pip install smartapi-python pyotp logzero websocket-client
+python3 "${CLAUDE_SKILL_DIR}/angel_recorder.py" record RELIANCE AXISBANK MCX     # run from 9:10 IST; stops at 15:31
+python3 "${CLAUDE_SKILL_DIR}/angel_recorder.py" flow AXISBANK --date 2026-11-12
+```
+
+Only with this data may order flow get a non-zero evidence score, and it is still labelled ESTIMATED (snapshots, quote/tick rule).
+
 How to read it, and what NOT to claim:
 
 - Delivery % = delivered quantity / traded quantity. Higher than the stock's own average with rising price and volume MAY indicate accumulation; with a falling
