@@ -3,3 +3,4 @@ __pycache__/
 trader/
 .DS_Store
 logs/
+research/cache/
