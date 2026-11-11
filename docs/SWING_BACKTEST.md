@@ -120,3 +120,47 @@ Run 2026-11-11. Data: Yahoo daily bars 2021-11-11 to 2026-11-11 for 477 of 496 N
 | fvg single-3R | 562 | 35.4% | 787 / -665 | -151 (-288..-51) | -0.30 | 0.65 | -84882 | 84882 | 13 | -389 | -1.20 | 0% / 0% / 59% |
 
 Limits: survivorship bias (today's index members); Yahoo daily bars (split-adjusted, not dividend-adjusted); a bar touching stop and target counts as the stop; signals are ranked by relative volume when more appear than open slots; no news/results filter; the CI assumes independent trades. FAILED/UNTESTED concepts are listed in the strategy document.
+
+## Iteration 2: relative-strength filter (stock 60-day return minus NIFTY's, top 20 % of liquid stocks that day), Scenario A
+
+| setup | trades | win | avg win / loss Rs | expectancy Rs (95% CI) | avg R | PF | total Rs | max DD Rs | worst losing streak | avg week Rs | Sharpe (weekly) | weeks >=5k / >=10k / <0 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| squeeze+RS IS | 165 | 42.4% | 927 / -974 | -167 (-351..+23) | -0.14 | 0.70 | -27562 | 33956 | 10 | -242 | -1.03 | 0% / 0% / 46% |
+| squeeze+RS OOS | 168 | 44.0% | 769 / -815 | -117 (-253..+16) | -0.11 | 0.74 | -19696 | 21660 | 6 | -191 | -0.97 | 0% / 0% / 47% |
+| sweep+RS IS | 41 | 46.3% | 729 / -935 | -164 (-454..+155) | -0.13 | 0.67 | -6726 | 11657 | 5 | -68 | -0.66 | 0% / 0% / 16% |
+| sweep+RS OOS | 90 | 44.4% | 1275 / -997 | +13 (-275..+278) | -0.01 | 1.02 | 1132 | 16297 | 8 | +11 | 0.06 | 0% / 0% / 26% |
+| choch+RS IS | 144 | 47.2% | 805 / -773 | -28 (-202..+142) | -0.02 | 0.93 | -4025 | 14859 | 8 | -35 | -0.20 | 0% / 0% / 39% |
+| choch+RS OOS | 170 | 41.8% | 848 / -782 | -101 (-255..+57) | -0.08 | 0.78 | -17241 | 24406 | 9 | -164 | -0.89 | 0% / 0% / 52% |
+| pullback+RS IS | 266 | 45.9% | 855 / -790 | -35 (-162..+88) | -0.03 | 0.92 | -9413 | 23318 | 11 | -82 | -0.32 | 1% / 0% / 48% |
+| pullback+RS OOS | 252 | 49.6% | 977 / -856 | +53 (-82..+185) | +0.04 | 1.12 | 13352 | 19783 | 10 | +127 | 0.47 | 1% / 0% / 49% |
+| weekhigh+RS IS | 277 | 46.6% | 992 / -940 | -40 (-174..+110) | -0.03 | 0.92 | -11162 | 24230 | 10 | -97 | -0.31 | 3% / 0% / 57% |
+| weekhigh+RS OOS | 273 | 40.3% | 836 / -850 | -170 (-289..-58) | -0.18 | 0.66 | -46492 | 48172 | 9 | -443 | -1.95 | 0% / 0% / 64% |
+| fvg+RS IS | 267 | 41.6% | 1065 / -944 | -109 (-263..+44) | -0.08 | 0.80 | -29131 | 31910 | 13 | -253 | -0.82 | 3% / 0% / 57% |
+| fvg+RS OOS | 256 | 44.1% | 748 / -746 | -87 (-200..+36) | -0.15 | 0.79 | -22198 | 28935 | 15 | -211 | -0.91 | 0% / 0% / 50% |
+| random+RS IS | 198 | 44.9% | 1101 / -879 | +11 (-167..+186) | +0.02 | 1.02 | 2198 | 15291 | 7 | +19 | 0.08 | 2% / 0% / 50% |
+| random+RS OOS | 210 | 45.2% | 1052 / -946 | -42 (-202..+118) | -0.03 | 0.92 | -8834 | 24958 | 13 | -84 | -0.31 | 1% / 0% / 50% |
+
+## Iteration 2b: same RS filter, 10-day holding window (Scenario A)
+
+| setup | trades | win | avg win / loss Rs | expectancy Rs (95% CI) | avg R | PF | total Rs | max DD Rs | worst losing streak | avg week Rs | Sharpe (weekly) | weeks >=5k / >=10k / <0 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| squeeze+RS 10d IS | 132 | 44.7% | 1183 / -1199 | -134 (-362..+91) | -0.10 | 0.80 | -17738 | 23461 | 13 | -154 | -0.67 | 0% / 0% / 35% |
+| squeeze+RS 10d OOS | 132 | 40.9% | 1331 / -1049 | -75 (-323..+162) | -0.10 | 0.88 | -9960 | 15034 | 11 | -96 | -0.42 | 0% / 0% / 42% |
+| sweep+RS 10d IS | 39 | 64.1% | 1004 / -1250 | +195 (-194..+588) | +0.13 | 1.43 | 7593 | 8463 | 5 | +76 | 0.60 | 0% / 0% / 9% |
+| sweep+RS 10d OOS | 77 | 46.8% | 1541 / -1127 | +120 (-204..+496) | +0.08 | 1.20 | 9236 | 9130 | 6 | +88 | 0.41 | 1% / 0% / 23% |
+| choch+RS 10d IS | 115 | 47.8% | 1274 / -1025 | +75 (-183..+344) | +0.05 | 1.14 | 8569 | 14634 | 5 | +75 | 0.36 | 1% / 0% / 31% |
+| choch+RS 10d OOS | 121 | 41.3% | 1247 / -1071 | -113 (-345..+128) | -0.08 | 0.82 | -13684 | 30024 | 6 | -132 | -0.58 | 0% / 0% / 42% |
+| pullback+RS 10d IS | 168 | 49.4% | 1353 / -1092 | +116 (-103..+339) | +0.08 | 1.21 | 19510 | 22259 | 9 | +168 | 0.63 | 1% / 0% / 35% |
+| pullback+RS 10d OOS | 157 | 41.4% | 1272 / -1051 | -89 (-299..+134) | -0.07 | 0.85 | -14023 | 28570 | 10 | -136 | -0.53 | 1% / 0% / 44% |
+| weekhigh+RS 10d IS | 191 | 43.5% | 1407 / -1167 | -48 (-249..+164) | -0.04 | 0.93 | -9251 | 20630 | 8 | -80 | -0.27 | 1% / 0% / 45% |
+| weekhigh+RS 10d OOS | 195 | 43.6% | 1385 / -1228 | -89 (-288..+120) | -0.06 | 0.87 | -17349 | 22699 | 6 | -167 | -0.52 | 2% / 0% / 52% |
+| fvg+RS 10d IS | 189 | 42.9% | 1511 / -1195 | -35 (-246..+191) | -0.01 | 0.95 | -6702 | 19235 | 9 | -59 | -0.20 | 3% / 0% / 47% |
+| fvg+RS 10d OOS | 185 | 43.2% | 1212 / -1176 | -143 (-321..+59) | -0.10 | 0.79 | -26512 | 32882 | 7 | -252 | -1.00 | 1% / 0% / 46% |
+| random+RS 10d IS | 140 | 48.6% | 1521 / -1160 | +142 (-105..+413) | +0.11 | 1.24 | 19920 | 11248 | 7 | +176 | 0.75 | 2% / 0% / 36% |
+| random+RS 10d OOS | 156 | 46.8% | 1379 / -1288 | -40 (-281..+209) | -0.02 | 0.94 | -6266 | 25941 | 7 | -60 | -0.21 | 1% / 0% / 39% |
+
+
+**Iteration 2 finding (2026-11-11):** the relative-strength filter did not create an edge. Only `sweep + RS, 10-day hold` was positive in both periods
+(IS +Rs 195/trade on 39 trades, OOS +Rs 120/trade on 77 trades), but its confidence intervals include zero and the RS-filtered RANDOM entry was
+similar in-sample (+Rs 142). It is a lead for paper trading only, not a validated strategy. Everything else stays REJECT.
+

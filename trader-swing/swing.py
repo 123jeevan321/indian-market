@@ -305,7 +305,28 @@ def make_trade(b, t, struct_stop, risk_inr, cash, hold=5, mode="ladder"):
 
 # ---------------------------------------------------------------- backtest
 
-def signals_for(data, setup, seed=7):
+def rs_ranks(data, nifty, look=60):
+    """{(symbol, date): percentile 0..1} of (stock 60-day return - NIFTY 60-day return) among liquid stocks that day."""
+    nret = {}
+    for i in range(look, len(nifty)):
+        nret[nifty[i]["d"]] = nifty[i]["c"] / nifty[i - look]["c"] - 1
+    by_day = {}
+    for s, b in data.items():
+        for t in range(look, len(b)):
+            x = b[t]
+            if x["avgval"] < 25e7 or x["d"] not in nret:
+                continue
+            by_day.setdefault(x["d"], []).append((x["c"] / b[t - look]["c"] - 1 - nret[x["d"]], s))
+    out = {}
+    for d, rows in by_day.items():
+        rows.sort()
+        n = len(rows)
+        for i, (_, s) in enumerate(rows):
+            out[(s, d)] = (i + 1) / float(n)
+    return out
+
+
+def signals_for(data, setup, seed=7, rs=None, rs_min=0.0):
     """All signals for a setup -> list of (signal_date, symbol, index, struct_stop, rvol)."""
     rng = random.Random(seed)
     out = []
@@ -321,6 +342,8 @@ def signals_for(data, setup, seed=7):
             x = b[t]
             if x["avgval"] < 25e7 or x["c"] < 100:
                 continue
+            if rs is not None and rs.get((s, x["d"]), 0) < rs_min:
+                continue
             if setup == "random":
                 if rng.random() < 0.01:
                     out.append((x["d"], s, t, x["c"] - 1.5 * x["atr"] + 0.1 * x["atr"], 0))
@@ -331,7 +354,7 @@ def signals_for(data, setup, seed=7):
     return out
 
 
-def portfolio(data, sigs, capital, risk_inr, max_pos, mode="ladder"):
+def portfolio(data, sigs, capital, risk_inr, max_pos, mode="ladder", hold=5):
     """Chronological portfolio: highest relative volume first; at most max_pos open; cash-limited; one position per stock."""
     by_day = {}
     for sig in sigs:
@@ -349,7 +372,7 @@ def portfolio(data, sigs, capital, risk_inr, max_pos, mode="ladder"):
         for sig in sorted(by_day[d], key=lambda z: -z[4]):
             if len(open_pos) >= max_pos or any(p["symbol"] == sig[1] for p in open_pos):
                 continue
-            tr = make_trade(data[sig[1]], sig[2], sig[3], risk_inr, cash, mode=mode)
+            tr = make_trade(data[sig[1]], sig[2], sig[3], risk_inr, cash, hold=hold, mode=mode)
             if not tr:
                 continue
             tr["symbol"], tr["signal_day"] = sig[1], d
@@ -446,6 +469,17 @@ def cmd_backtest(a):
     out += ["", "## Exit variant check (Scenario A, single 3R target instead of the half-at-1.5R ladder)", "", HEAD]
     for setup in SETUPS:
         out.append(fmt(stats(portfolio(data, signals_for(data, setup), 100000, 1500, a.max_pos, mode="single"), setup + " single-3R")))
+    rs = rs_ranks(data, nifty)
+    out += ["", "## Iteration 2: relative-strength filter (stock 60-day return minus NIFTY's, top 20 % of liquid stocks that day), Scenario A", "", HEAD]
+    for setup in SETUPS + ("random",):
+        tr = portfolio(data, signals_for(data, setup, rs=rs, rs_min=0.8), 100000, 1500, a.max_pos)
+        out.append(fmt(stats([t for t in tr if t["signal_day"] < cut], "%s+RS IS" % setup)))
+        out.append(fmt(stats([t for t in tr if t["signal_day"] >= cut], "%s+RS OOS" % setup)))
+    out += ["", "## Iteration 2b: same RS filter, 10-day holding window (Scenario A)", "", HEAD]
+    for setup in SETUPS + ("random",):
+        tr = portfolio(data, signals_for(data, setup, rs=rs, rs_min=0.8), 100000, 1500, a.max_pos, hold=10)
+        out.append(fmt(stats([t for t in tr if t["signal_day"] < cut], "%s+RS 10d IS" % setup)))
+        out.append(fmt(stats([t for t in tr if t["signal_day"] >= cut], "%s+RS 10d OOS" % setup)))
     out += ["", "Limits: survivorship bias (today's index members); Yahoo daily bars (split-adjusted, not dividend-adjusted); a bar touching stop and "
             "target counts as the stop; signals are ranked by relative volume when more appear than open slots; no news/results filter; the CI "
             "assumes independent trades. FAILED/UNTESTED concepts are listed in the strategy document."]

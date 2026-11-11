@@ -81,6 +81,74 @@ def normalise(tick, symbol):
             "bids": bids, "asks": asks, "seq": tick.get("sequence_number")}
 
 
+def credentials():
+    """The four ANGEL_* values from the environment, or (Windows) from the user's saved environment variables when this
+    process started before they were set. Values are never printed."""
+    keys = ("ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_PIN", "ANGEL_TOTP_SECRET")
+    env = {k: os.environ.get(k) for k in keys}
+    if not all(env.values()) and sys.platform.startswith("win"):
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as reg:
+                for k in keys:
+                    if not env[k]:
+                        try:
+                            env[k] = winreg.QueryValueEx(reg, k)[0]
+                        except OSError:
+                            pass
+        except OSError:
+            pass
+    missing = [k for k, v in env.items() if not v]
+    if missing:
+        raise SystemExit("set these environment variables first (never paste them in chat): " + ", ".join(missing))
+    return env
+
+
+def session(env):
+    import pyotp
+    from SmartApi import SmartConnect
+    api = SmartConnect(env["ANGEL_API_KEY"])
+    sess = api.generateSession(env["ANGEL_CLIENT_CODE"], env["ANGEL_PIN"], pyotp.TOTP(env["ANGEL_TOTP_SECRET"].replace(" ", "")).now())
+    if not sess or not sess.get("status"):
+        raise SystemExit("Angel One login FAILED: %s (errorcode %s)" % ((sess or {}).get("message") or "no answer",
+                                                                    (sess or {}).get("errorcode")))
+    return api, sess
+
+
+def cmd_login(a):
+    """Read-only check: log in, read the profile and one LTP, then log out."""
+    try:
+        import pyotp  # noqa: F401
+        from SmartApi import SmartConnect  # noqa: F401
+    except ImportError:
+        raise SystemExit("install first: pip install smartapi-python pyotp logzero websocket-client")
+    env = credentials()
+    api, sess = session(env)
+    feed = api.getfeedToken()
+    name = ""
+    try:
+        prof = api.getProfile(sess["data"]["refreshToken"])
+        name = (prof.get("data") or {}).get("name") or ""
+    except Exception:
+        pass
+    print("LOGIN OK for client %s%s; feed token %s." % (env["ANGEL_CLIENT_CODE"][:2] + "***", (" (" + name.split()[0] + ")") if name else "",
+                                                       "received" if feed else "MISSING"))
+    try:
+        q = api.ltpData("NSE", "RELIANCE-EQ", tokens_for(["RELIANCE"]).get("RELIANCE", "2885"))
+        if q and q.get("status"):
+            print("Market data OK: RELIANCE LTP %s (Angel One, %s IST)." % (q["data"].get("ltp"), ist_now().strftime("%Y-%m-%d %H:%M")))
+        else:
+            print("Market data call answered: %s" % (q or {}).get("message"))
+    except Exception as e:
+        print("Market data call failed: %s" % e)
+    try:
+        api.terminateSession(env["ANGEL_CLIENT_CODE"])
+        print("Logged out. Nothing was ordered (this tool has no order calls).")
+    except Exception:
+        pass
+    return 0
+
+
 def cmd_record(a):
     try:
         import pyotp
@@ -88,10 +156,7 @@ def cmd_record(a):
         from SmartApi.smartWebSocketV2 import SmartWebSocketV2
     except ImportError:
         raise SystemExit("install first: pip install smartapi-python pyotp logzero websocket-client")
-    env = {k: os.environ.get(k) for k in ("ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_PIN", "ANGEL_TOTP_SECRET")}
-    missing = [k for k, v in env.items() if not v]
-    if missing:
-        raise SystemExit("set these environment variables first (never paste them in chat): " + ", ".join(missing))
+    env = credentials()
     syms = [s.upper() for s in a.symbols][:MAX_SYMBOLS]
     toks = tokens_for(syms)
     unknown = [s for s in syms if s not in toks]
@@ -101,10 +166,7 @@ def cmd_record(a):
         raise SystemExit("no symbols to record")
     by_token = {v: k for k, v in toks.items()}
 
-    api = SmartConnect(env["ANGEL_API_KEY"])
-    sess = api.generateSession(env["ANGEL_CLIENT_CODE"], env["ANGEL_PIN"], pyotp.TOTP(env["ANGEL_TOTP_SECRET"]).now())
-    if not sess or not sess.get("status"):
-        raise SystemExit("Angel One login failed: %s" % ((sess or {}).get("message") or "no answer"))
+    api, sess = session(env)
     jwt = sess["data"]["jwtToken"]
     feed = api.getfeedToken()
     day = ist_now().date().isoformat()
@@ -226,6 +288,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="Read-only Angel One tick/depth recorder (never places orders).")
     sub = ap.add_subparsers(dest="cmd")
     p = sub.add_parser("record"); p.set_defaults(fn=cmd_record); p.add_argument("symbols", nargs="+"); p.add_argument("--out", default=OUT)
+    p = sub.add_parser("login"); p.set_defaults(fn=cmd_login)
     p = sub.add_parser("tokens"); p.set_defaults(fn=cmd_tokens); p.add_argument("symbols", nargs="+")
     p = sub.add_parser("flow"); p.set_defaults(fn=cmd_flow); p.add_argument("symbol"); p.add_argument("--date", default=ist_now().date().isoformat())
     p.add_argument("--out", default=OUT); p.add_argument("--last", type=int, default=30); p.add_argument("--json", action="store_true")
