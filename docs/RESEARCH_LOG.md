@@ -40,3 +40,11 @@ Findings: delivery % and futures OI are significant RELATIVE signals (26 Bonferr
 long-only trade beats costs. User hypothesis (delivery > 65 % + long build-up): negative net at 1-5 days, edge gone in 2025-26.
 Next: forward paper-track the two candidates in the report; start the Angel recorder for order-flow features; consider a
 market-neutral design only if F&O hedging is ever allowed (currently excluded).
+
+## 2026-11-12: Round 9 complete (cross-strategy failure analysis, regimes, selector, 2 % study)
+
+Code: research/round9.py (streams, analyse, select, twopct), research/write_round9_docs.py. Docs: docs/ROUND9_*.md (7 files).
+12 strategies from rounds 1-8 rebuilt trade by trade on common dates. Regimes (trend, volatility, breadth, gap) use decision-time data
+only. Walk-forward selector: +0.42 % per traded day in its training years, -0.33 % validation, -0.07 % 2025-26 -> rejected.
+2 % study: 35-39 % of stock-days touch +-2 %, but a 10:00 entry hits +2 % first on ~10 % of days; all targets negative after costs.
+Answer to the Round 9 question: not with the current strategy set. Next: forward data (Angel recorder, Round 8 paper-tracking).
