@@ -27,7 +27,7 @@ holds the other skills; every tool is `python3 <skill>/<script>.py`.
 ## 1. Pre-market (before 9:00-9:15)
 
 - Previous day: Nifty and Bank Nifty direction, high/low/close; global cues; GIFT Nifty (a hint, not a prediction);
-  USD/INR, crude, gold; India VIX; FII/DII (`python3 trader-flows/flows.py fii-dii`, or browser tools / the user
+  USD/INR, crude, gold; India VIX (`python3 trader-flows/flows.py vix`); FII/DII (`python3 trader-flows/flows.py fii-dii`, or browser tools / the user
   pasting it; always give date and source); RBI/government; results today; sector news.
   Use WebSearch/WebFetch or the browser tools for live items and cite them. If you cannot get one, say so.
 - Bias: strong bullish / mildly bullish / neutral / mildly bearish / strong bearish, and WHY.

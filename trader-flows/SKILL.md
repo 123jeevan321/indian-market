@@ -15,6 +15,7 @@ argument-hint: "[delivery SYMBOL... | screen | fii-dii]"
 python3 "${CLAUDE_SKILL_DIR}/flows.py" delivery RELIANCE TCS --days 10     # delivery %, volume, close by day
 python3 "${CLAUDE_SKILL_DIR}/flows.py" screen --top 20 --min-turnover 100  # liquid names with unusual volume / delivery (uses trader/universe.txt)
 python3 "${CLAUDE_SKILL_DIR}/flows.py" fii-dii                             # FII/FPI and DII net, if NSE answers
+python3 "${CLAUDE_SKILL_DIR}/flows.py" vix                                  # India VIX level, change, regime (context only)
 python3 "${CLAUDE_SKILL_DIR}/flows.py" deals --min-value 500              # latest NSE bulk + block deals (official CSVs)
 ```
 

@@ -15,6 +15,7 @@ It is a CONTEXT tool, not an order-flow tool:
     python3 flows.py delivery RELIANCE TCS --days 10        # one line per stock per day
     python3 flows.py screen --top 20 --min-turnover 100      # liquid names with unusual delivery / volume
     python3 flows.py fii-dii                                 # FII/FPI and DII cash-market net, if NSE answers
+    python3 flows.py vix                                     # India VIX level, change, regime (Yahoo ^INDIAVIX)
     python3 flows.py deals --min-value 500                   # latest bulk + block deals (archives bulk.csv / block.csv)
     python3 flows.py deals RELIANCE INFY --kind bulk
     python3 flows.py delivery INFY --offline tests/fixtures/trader-flows   # saved files, no network
@@ -302,6 +303,42 @@ def cmd_deals(a):
     return 0
 
 
+def cmd_vix(a):
+    """India VIX from Yahoo (^INDIAVIX): last close, change, 10-day range and a regime label. Context only."""
+    if a.offline:
+        with open(os.path.join(a.offline, "indiavix.json"), encoding="utf-8") as fh:
+            doc = json.load(fh)
+    else:
+        try:
+            req = urllib.request.Request("https://query2.finance.yahoo.com/v8/finance/chart/%5EINDIAVIX?range=1mo&interval=1d",
+                                         headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                doc = json.loads(r.read().decode())
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            raise FlowError("India VIX: Yahoo did not answer (%s): DATA UNAVAILABLE" % getattr(e, "reason", e))
+    try:
+        res = doc["chart"]["result"][0]
+        closes = [c for c in res["indicators"]["quote"][0]["close"] if c]
+        last = res["meta"].get("regularMarketPrice") or closes[-1]
+        when = res["meta"].get("regularMarketTime")
+    except (KeyError, IndexError, TypeError):
+        raise FlowError("India VIX: unexpected answer from Yahoo: DATA UNAVAILABLE")
+    prev = closes[-2] if len(closes) > 1 else None
+    regime = "high (above 20): widen stops / cut size / expect whipsaws" if last > 20 else (
+        "elevated (16-20)" if last >= 16 else "normal (13-16)" if last >= 13 else "low (under 13): quiet, breakouts may lack follow-through")
+    ts = (datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=when + 19800)).strftime("%Y-%m-%d %H:%M IST") if when else "unknown time"
+    out = {"india_vix": round(last, 2), "previous_close": round(prev, 2) if prev else None,
+           "change_pct": round(100 * (last / prev - 1), 2) if prev else None, "range_10d": [round(min(closes[-10:]), 2), round(max(closes[-10:]), 2)],
+           "regime": regime, "as_of": ts, "source": "Yahoo Finance ^INDIAVIX (unofficial, delayed)"}
+    if a.json:
+        print(json.dumps(out, indent=2))
+        return 0
+    print("India VIX %.2f (%s vs previous close %s), 10-day range %.2f to %.2f, regime: %s. As of %s. Source: Yahoo ^INDIAVIX (unofficial, delayed)." % (
+        last, ("%+.2f%%" % out["change_pct"]) if prev else "n/a", ("%.2f" % prev) if prev else "n/a", out["range_10d"][0], out["range_10d"][1], regime, ts))
+    print("Context only: the regime bands are rules of thumb, not tested thresholds.")
+    return 0
+
+
 def cmd_fii_dii(a):
     import importlib.util
     here = os.path.dirname(os.path.abspath(__file__))
@@ -332,6 +369,7 @@ def main(argv=None):
     for name, fn, h in (("delivery", cmd_delivery, "delivery % and volume by day for some stocks"),
                         ("screen", cmd_screen, "liquid stocks with unusual volume / delivery"),
                         ("fii-dii", cmd_fii_dii, "FII/FPI and DII net cash-market activity"),
+                        ("vix", cmd_vix, "India VIX level, change and regime"),
                         ("deals", cmd_deals, "NSE bulk and block deals (published after the trade)")):
         p = sub.add_parser(name, help=h)
         p.set_defaults(fn=fn)

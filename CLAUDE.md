@@ -24,6 +24,7 @@ skill is invoked.
 - Intraday capital Rs 75,000. Max planned loss per trade Rs 500 (confirmed).
 - Max daily loss: the user allows Rs 1,000 to Rs 3,000 (not a fixed number). Config default Rs 2,000; ask which they want today and never exceed Rs 3,000. When the day's loss reaches it, stop for the day.
 - No cap on the number of trades per day (the daily loss limit and the 2-position limit do the capping). Do not overtrade: quality over count.
+- Per-trade max loss: Rs 500 default; the user (2026-11-11) allows Rs 500 to Rs 1,000. Use Rs 500 unless they name a figure for the trade; the total open-risk cap (Rs 1,000) still applies, so two Rs 1,000 trades need that cap raised first. Reward:risk minimum 1.5.
 - Max 2 simultaneous positions, max total planned open risk Rs 1,000. Per-trade max loss stays Rs 500 unless the user changes it (ask if they meant a different figure).
 - No averaging down, no martingale, no revenge trading, no bigger size to recover losses, no widening a stop,
   no trade without a stop, no trade whose risk cannot be calculated.
