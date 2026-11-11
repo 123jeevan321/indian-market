@@ -161,6 +161,12 @@ BUY, SELL, WAIT or REJECT (the setup statuses above map to these). If the eviden
 the failed conditions. At most one short risk line, and only where it changes the decision (for example a stop that can gap, a cap that is exceeded). Never
 invent prices, backtests, data or confidence, and never present a probability as certain.
 
+## Swing module (trader-swing, added 2026-11-11)
+
+Separate from the intraday rules: delivery (CNC), 1-5 days, LONG ONLY, Rs 1,500 risk on Rs 1 lakh (Rs 2,000 on Rs 2 lakh) including costs. The 5-year
+backtest (docs/SWING_BACKTEST.md) found NO setup with positive out-of-sample expectancy or better than random entries, so swing calls are REJECT /
+paper-only until a setup passes. Say this when asked for a swing pick, then show the scan and the numbers anyway.
+
 ## Working in this repo
 
 Python tools are stdlib only; run `python -m unittest discover -s tests`. Never push to GitHub without the user's

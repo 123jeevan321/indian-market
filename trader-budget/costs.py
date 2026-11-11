@@ -74,6 +74,30 @@ def intraday_costs(qty, buy_price, sell_price, exchange="NSE", slippage_per_shar
     }
 
 
+DELIVERY = {"as_of": "2026-11-10", "source": "https://zerodha.com/charges (Equity delivery, NSE)",
+            "brokerage": 0.0, "stt_pct": 0.1, "exchange_nse_pct": 0.00307, "sebi_per_crore": 10.0,
+            "stamp_buy_pct": 0.015, "gst_pct": 18.0, "dp_per_sell": 15.34}
+
+
+def delivery_costs(qty, buy_price, sell_price, sells=1, slippage_per_share=0.0, rates=None):
+    """Itemised delivery (CNC) round-trip costs: zero brokerage, STT 0.1 % on BOTH sides, stamp 0.015 % on the buy,
+    exchange + SEBI on turnover, GST on (exchange + SEBI), and a Rs 15.34 DP charge per sell (per scrip per day)."""
+    r = rates or DELIVERY
+    qty = int(qty)
+    buy_val, sell_val = qty * float(buy_price), qty * float(sell_price)
+    turnover = buy_val + sell_val
+    stt = turnover * r["stt_pct"] / 100.0
+    exch = turnover * r["exchange_nse_pct"] / 100.0
+    sebi = turnover * r["sebi_per_crore"] / 1e7
+    stamp = buy_val * r["stamp_buy_pct"] / 100.0
+    gst = (r["brokerage"] + exch + sebi) * r["gst_pct"] / 100.0
+    dp = r["dp_per_sell"] * max(1, int(sells)) if qty > 0 else 0.0
+    slip = qty * float(slippage_per_share) * 2.0
+    total = r["brokerage"] + stt + exch + sebi + stamp + gst + dp
+    return {"stt": _r(stt), "exchange": _r(exch), "sebi": _r(sebi), "stamp": _r(stamp), "gst": _r(gst), "dp": _r(dp),
+            "charges": _r(total), "slippage": _r(slip), "total_with_slippage": _r(total + slip), "rates_as_of": r["as_of"]}
+
+
 def net_pnl(side, qty, entry, exit_price, exchange="NSE", slippage_per_share=0.0):
     """(gross, costs dict, net) for a trade closed at exit_price. side is 'buy' (long) or 'sell' (short)."""
     qty = int(qty)
