@@ -48,3 +48,8 @@ Code: research/round9.py (streams, analyse, select, twopct), research/write_roun
 only. Walk-forward selector: +0.42 % per traded day in its training years, -0.33 % validation, -0.07 % 2025-26 -> rejected.
 2 % study: 35-39 % of stock-days touch +-2 %, but a 10:00 entry hits +2 % first on ~10 % of days; all targets negative after costs.
 Answer to the Round 9 question: not with the current strategy set. Next: forward data (Angel recorder, Round 8 paper-tracking).
+
+## 2026-11-12: Round 10 started (Angel One order-flow collection)
+
+Recorder v2 audited and hardened (reconnect, 2 s flush, de-duplication, session log, token/exchange). First session scheduled 09:08-15:31 IST
+for 25 stocks into trader/ticks_r10. Pre-registered tests in docs/ROUND10_ORDER_FLOW_RESEARCH.md; first look after 20 sessions.

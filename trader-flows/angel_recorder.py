@@ -150,59 +150,107 @@ def cmd_login(a):
 
 
 def cmd_record(a):
+    """Round 10 recorder (v2): token + exchange on every row, exchange timestamp and local receive time, de-duplication of repeated
+    packets, flush every 2 seconds, automatic re-login and re-subscribe after a disconnect, and a session log of every connect,
+    disconnect and gap so missing data is visible. Writes only market data; never touches orders."""
     try:
-        import pyotp
-        from SmartApi import SmartConnect
+        import pyotp  # noqa: F401
         from SmartApi.smartWebSocketV2 import SmartWebSocketV2
     except ImportError:
         raise SystemExit("install first: pip install smartapi-python pyotp logzero websocket-client")
+    import threading
     env = credentials()
     syms = [s.upper() for s in a.symbols][:MAX_SYMBOLS]
     toks = tokens_for(syms)
     unknown = [s for s in syms if s not in toks]
     if unknown:
-        print("not found in Angel's NSE equity master, skipped: " + ", ".join(unknown))
+        print("not found in Angel's NSE equity master, skipped: " + ", ".join(unknown), flush=True)
     if not toks:
         raise SystemExit("no symbols to record")
     by_token = {v: k for k, v in toks.items()}
-
-    api, sess = session(env)
-    jwt = sess["data"]["jwtToken"]
-    feed = api.getfeedToken()
-    day = ist_now().date().isoformat()
-    folder = os.path.join(a.out, day)
+    day = ist_now().date()
+    folder = os.path.join(a.out, day.isoformat())
     os.makedirs(folder, exist_ok=True)
     files = {s: open(os.path.join(folder, s + ".jsonl"), "a", encoding="utf-8") for s in toks}
-    stop_at = datetime.datetime.combine(ist_now().date(), datetime.time(15, 31))
-    count = {"n": 0}
-    ws = SmartWebSocketV2(jwt, env["ANGEL_API_KEY"], env["ANGEL_CLIENT_CODE"], feed)
+    log = open(os.path.join(folder, "_session.log"), "a", encoding="utf-8")
+    stop_at = datetime.datetime.combine(day, datetime.time(*map(int, a.until.split(":"))))
+    state = {"n": 0, "dupes": 0, "last": {}, "last_flush": time.time(), "last_tick": None, "stop": False}
+    lock = threading.Lock()
 
-    def on_open(wsapp):
-        ws.subscribe("rec1", SNAP_QUOTE, [{"exchangeType": 1, "tokens": list(toks.values())}])
-        print("recording %d symbols (SnapQuote) to %s until 15:31 IST: %s" % (len(toks), folder, ", ".join(toks)))
+    def note(msg):
+        line = "%s %s" % (ist_now().isoformat(timespec="milliseconds"), msg)
+        log.write(line + "\n"); log.flush()
+        print(line, flush=True)
 
     def on_data(wsapp, msg):
         sym = by_token.get(str(msg.get("token")))
         if not sym:
             return
-        files[sym].write(json.dumps(normalise(msg, sym)) + "\n")
-        count["n"] += 1
-        if count["n"] % 500 == 0:
-            for f in files.values():
-                f.flush()
+        key = (msg.get("exchange_timestamp"), msg.get("last_traded_price"), msg.get("volume_trade_for_the_day"),
+               msg.get("total_buy_quantity"), msg.get("total_sell_quantity"))
+        with lock:
+            if state["last"].get(sym) == key:
+                state["dupes"] += 1
+                return
+            state["last"][sym] = key
+            row = normalise(msg, sym)
+            row.update(token=str(msg.get("token")), exchange="NSE", mode=msg.get("subscription_mode"))
+            files[sym].write(json.dumps(row) + "\n")
+            state["n"] += 1
+            now = time.time()
+            if gap_check(now):
+                pass
+            state["last_tick"] = now
+            if now - state["last_flush"] >= 2.0:
+                for f in files.values():
+                    f.flush()
+                state["last_flush"] = now
+
+    def gap_check(now):
+        if state["last_tick"] and now - state["last_tick"] > 30:
+            note("GAP: no packets for %.0f s" % (now - state["last_tick"]))
+        return False
+
+    attempts = 0
+    while ist_now() < stop_at and attempts < a.max_reconnects:
+        attempts += 1
+        try:
+            api, sess = session(env)
+            ws = SmartWebSocketV2(sess["data"]["jwtToken"], env["ANGEL_API_KEY"], env["ANGEL_CLIENT_CODE"], api.getfeedToken(),
+                                  max_retry_attempt=3, retry_delay=5)
+        except SystemExit as e:
+            note("LOGIN FAILED (attempt %d): %s" % (attempts, e))
+            time.sleep(20)
+            continue
+
+        def on_open(wsapp, ws=ws):
+            ws.subscribe("r10", SNAP_QUOTE, [{"exchangeType": 1, "tokens": list(toks.values())}])
+            note("CONNECTED (attempt %d), subscribed %d symbols SnapQuote: %s" % (attempts, len(toks), ",".join(toks)))
+
+        def on_error(wsapp, err):
+            note("ERROR %s" % err)
+
+        def on_close(wsapp):
+            note("DISCONNECTED after %d rows" % state["n"])
+
+        ws.on_open, ws.on_data, ws.on_error, ws.on_close = on_open, on_data, on_error, on_close
+        t = threading.Thread(target=ws.connect, daemon=True)
+        t.start()
+        while t.is_alive() and ist_now() < stop_at:
+            time.sleep(1)
         if ist_now() >= stop_at:
-            ws.close_connection()
-
-    def on_error(wsapp, err):
-        print("websocket error: %s" % err, file=sys.stderr)
-
-    def on_close(wsapp):
+            try:
+                ws.close_connection()
+            except Exception:
+                pass
+            break
+        note("connection thread ended; reconnecting in 10 s")
+        time.sleep(10)
+    with lock:
         for f in files.values():
-            f.close()
-        print("closed after %d ticks" % count["n"])
-
-    ws.on_open, ws.on_data, ws.on_error, ws.on_close = on_open, on_data, on_error, on_close
-    ws.connect()
+            f.flush(); f.close()
+    note("STOPPED: %d rows written, %d duplicate packets skipped, %d connection attempts" % (state["n"], state["dupes"], attempts))
+    log.close()
     return 0
 
 
@@ -284,11 +332,49 @@ def cmd_tokens(a):
     return 0
 
 
+
+def cmd_quality(a):
+    """Per-day data-quality report for a recording folder: rows, update rate, gaps, clock offset, crossed books, session events."""
+    folder = os.path.join(a.out, a.date)
+    if not os.path.isdir(folder):
+        raise SystemExit("no recording folder %s" % folder)
+    print("Recording %s" % folder)
+    print("  %-11s %8s %9s %10s %12s %14s %8s" % ("symbol", "rows", "rows/min", "gaps>30s", "max gap s", "clock offs ms", "crossed"))
+    for f in sorted(os.listdir(folder)):
+        if not f.endswith(".jsonl"):
+            continue
+        ticks = [json.loads(ln) for ln in open(os.path.join(folder, f), encoding="utf-8") if ln.strip()]
+        if not ticks:
+            continue
+        recv = [datetime.datetime.fromisoformat(t["recv"]) for t in ticks]
+        mkt = [r for r in recv if datetime.time(9, 15) <= r.time() <= datetime.time(15, 30)]
+        gaps = [(b - a_).total_seconds() for a_, b in zip(mkt, mkt[1:])]
+        offs = []
+        for t, r in zip(ticks, recv):
+            if t.get("exch_ts"):
+                ex = datetime.datetime(1970, 1, 1) + datetime.timedelta(milliseconds=t["exch_ts"]) + datetime.timedelta(hours=5.5)
+                offs.append((r - ex).total_seconds() * 1000)
+        crossed = sum(1 for t in ticks if t["bids"] and t["asks"] and t["bids"][0][0] >= t["asks"][0][0])
+        mins = max(1.0, (mkt[-1] - mkt[0]).total_seconds() / 60) if len(mkt) > 1 else 1.0
+        print("  %-11s %8d %9.1f %10d %12.0f %14.0f %8d" % (f[:-6], len(ticks), len(mkt) / mins, sum(1 for g in gaps if g > 30),
+                                                         max(gaps) if gaps else 0, sorted(offs)[len(offs) // 2] if offs else 0, crossed))
+    log = os.path.join(folder, "_session.log")
+    if os.path.exists(log):
+        print("Session log:")
+        for ln in open(log, encoding="utf-8"):
+            print("  " + ln.rstrip())
+    return 0
+
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Read-only Angel One tick/depth recorder (never places orders).")
     sub = ap.add_subparsers(dest="cmd")
     p = sub.add_parser("record"); p.set_defaults(fn=cmd_record); p.add_argument("symbols", nargs="+"); p.add_argument("--out", default=OUT)
+    p.add_argument("--until", default="15:31", help="IST stop time HH:MM"); p.add_argument("--max-reconnects", type=int, default=30)
     p = sub.add_parser("login"); p.set_defaults(fn=cmd_login)
+    p = sub.add_parser("quality"); p.set_defaults(fn=cmd_quality)
+    p.add_argument("--date", default=ist_now().date().isoformat()); p.add_argument("--out", default="trader/ticks_r10")
     p = sub.add_parser("tokens"); p.set_defaults(fn=cmd_tokens); p.add_argument("symbols", nargs="+")
     p = sub.add_parser("flow"); p.set_defaults(fn=cmd_flow); p.add_argument("symbol"); p.add_argument("--date", default=ist_now().date().isoformat())
     p.add_argument("--out", default=OUT); p.add_argument("--last", type=int, default=30); p.add_argument("--json", action="store_true")
@@ -305,3 +391,4 @@ if __name__ == "__main__":
         except Exception:
             pass
     sys.exit(main())
+
