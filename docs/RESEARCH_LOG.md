@@ -24,3 +24,10 @@ Resume:
     python research/discovery.py stageA
     python research/discovery.py stageB
     python research/write_reports.py
+
+## 2026-11-11: Zerodha Kite MCP assessment (before Round 8)
+
+See docs/ZERODHA_INTEGRATION.md. Verified read-only: quote (5-level depth, VWAP, buy/sell totals, OI), 1-minute history back to 2021,
+continuous futures DAILY OI history, option chain. Not available: trade tape, historical depth, streaming. Its live fields matched Angel One
+exactly, so the Angel recorder stays the order-flow source; Zerodha adds futures OI history, option chains and cross-checks.
+Round 8 starts with step 1 of the plan in that document.
