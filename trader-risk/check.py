@@ -71,7 +71,7 @@ DEFAULTS = {
     "budget": 75000, "cash_buffer_pct": 0, "max_position_pct": 500, "max_order_inr": 375000,
     "min_order_inr": 1000, "max_loss_per_trade_inr": 500, "max_daily_loss_inr": 2000, "max_trades_per_day": 0,
     "max_orders_per_day": 12, "min_reward_risk": 1.5, "require_stop": True,
-    "max_open_positions": 2, "max_open_risk_inr": 1000, "max_cost_pct_of_reward": 25,
+    "max_open_positions": 2, "max_open_risk_inr": 1000, "max_cost_pct_of_reward": 25, "mis_leverage": 5,
     "slippage_ticks": 1, "tick_size": 0.05, "exchange": "NSE",
     "no_entries_before": "09:30", "no_entries_after": "14:45", "flat_by": "15:15",
     "broker": "zerodha", "paper": True, "blocked": [],
@@ -313,7 +313,11 @@ def account(cfg, portfolio, prices):
         if not budget:
             raise RiskError("no trader/portfolio.json and no budget in the config: "
                             "nothing to check the orders against")
-        return {"cash": budget, "shares": {}, "values": {}}, warnings
+        lev = max(_f(cfg.get("mis_leverage")) or 1.0, 1.0)      # intraday buying power = capital x MIS leverage
+        if lev > 1:
+            warnings.append("buying power is %s x %s MIS leverage = %s; trader-budget already limits each stock to "
+                            "Zerodha's own per-stock figure" % (money(budget), ("%g" % lev), money(budget * lev)))
+        return {"cash": budget * lev, "shares": {}, "values": {}}, warnings
     cash = _f(portfolio.get("cash"))
     if cash is None:
         raise RiskError("portfolio.json needs a \"cash\" number")
