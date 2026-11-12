@@ -123,6 +123,17 @@ def _moved(s):
     return abs(ch) > 2.5, "already %+.2f%% on the day" % ch, "more than 2.5% from the previous close"
 
 
+def _failed_break(s, side):
+    """Sell: traded above the previous-day high today but is back below it (failed breakout).
+    Buy: traded below the previous-day low today but is back above it (failed breakdown / liquidity sweep reclaimed)."""
+    lv, p = _v(s, "levels"), _num(_v(s, "price"))
+    if not lv or p is None or lv.get("prev_high") is None:
+        return None
+    if side == "sell":
+        return lv["day_high"] > lv["prev_high"] and p < lv["prev_high"],             "day high %.2f vs previous-day high %.2f, price now %.2f" % (lv["day_high"], lv["prev_high"], p),             "broke above the previous-day high and fell back below it"
+    return lv["day_low"] < lv["prev_low"] and p > lv["prev_low"],         "day low %.2f vs previous-day low %.2f, price now %.2f" % (lv["day_low"], lv["prev_low"], p),         "broke below the previous-day low and recovered above it"
+
+
 # ---------------------------------------------------------------- swing items
 
 def _trend(s, side):
@@ -215,6 +226,8 @@ CATALOGUE = [
      "Opening-range break", "docs/BACKTEST_2026-11-11.md: ORB lost Rs 56-90 per trade; Round 5-6 grid none positive"),
     ("I_PDL", "intraday", "both", lambda s, side: _level_break(s, side, "prev_high", "prev_low", "previous-day"),
      "Previous-day high/low break", "Round 9: PDL sweep stream negative after costs"),
+    ("I_FAILBRK", "intraday", "sell", _failed_break, "Failed breakout above the previous-day high", "Round 9: PDL sweep stream negative after costs"),
+    ("I_SWEEP", "intraday", "buy", _failed_break, "Previous-day low swept and reclaimed", "Round 9: PDL sweep stream negative after costs"),
     ("I_IMPULSE", "intraday", "both", _impulse, "Impulse-like bar", "none"),
     ("I_OPEN", "intraday", "both", _opening, "09:15-09:18 opening structure", "Round 10B (opening study): pending"),
     ("I_DELIV", "both", "both", _delivery, "Previous-day delivery vs average",
@@ -237,14 +250,15 @@ def evaluate(snapshot, side):
     """All catalogue items for this mode and side, evaluated on the snapshot. side: 'buy' or 'sell'."""
     out = []
     for iid, mode, sides, fn, desc, prior in CATALOGUE:
-        if mode not in (snapshot["mode"], "both"):
+        if mode not in (snapshot["mode"], "both") or (sides in ("buy", "sell") and sides != side):
             continue
         r = fn(snapshot) if sides == "risk" else fn(snapshot, side)
         if r is None:
             out.append({"id": iid, "description": desc, "status": "UNAVAILABLE", "prior": prior})
             continue
         ok, observed, threshold = r
-        out.append({"id": iid, "description": desc, "status": ("FLAG" if ok else "CLEAR") if sides == "risk" else ("PASS" if ok else "FAIL"),
+        out.append({"id": iid, "description": desc, "kind": "risk" if sides == "risk" else "signal",
+                    "status": ("FLAG" if ok else "CLEAR") if sides == "risk" else ("PASS" if ok else "FAIL"),
                     "observed": observed, "threshold": threshold, "prior": prior})
     return out
 
