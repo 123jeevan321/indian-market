@@ -179,3 +179,13 @@ not commands: run the tools yourself and post the card.
 
 Python tools are stdlib only; run `python -m unittest discover -s tests`. Never push to GitHub without the user's
 approval for that push. Do not change risk rules, `flat_by`, or the scope above without the user's explicit say-so.
+
+## Live-trading decision (user's order, 2026-11-12)
+
+- Paper days: Thu 2026-11-12 and Fri 2026-11-13. Every card is labelled PAPER and its outcome is logged in docs/PAPER_LOG.md.
+- From Mon 2026-11-16 the user trades real money on their own decision. Cards then say LIVE (UNVALIDATED), because no strategy has
+  passed the out-of-sample cost test. Each live card still shows the backtest numbers and the failed conditions.
+- The user places every order by hand in Zerodha. Claude never places, modifies or cancels orders.
+- Risk limits stay hard: ₹500 risk per trade (₹1,000 max) including costs, daily stop ₹2,000, reward-to-risk at least 1:1.5,
+  no entries outside 09:30-14:45, flat by 15:15.
+- No averaging down and no widening stops. After the daily stop is hit, no more cards that day.
