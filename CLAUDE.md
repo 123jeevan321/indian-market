@@ -215,8 +215,11 @@ with ONE stock in the Three-Agent Trading Report, all four sections in the SAME 
 
 How to produce it (never write the sections by hand from memory):
 - One named stock: `python trader-debate/debate.py run intraday|swing SYMBOL --report`
-- No stock named: scan first (trader-scanner / trader-swing), then `python trader-debate/debate.py best intraday|swing SYM1,SYM2,...`
-  on the top 3-5 candidates; it debates each and reports ONE (`report.pick`: a BUY/SELL decision first, else the most verified evidence).
+- No stock named, intraday: `python trader-debate/debate.py morning [--top 5]`: scans the whole Nifty 500 (user choice 2026-11-12),
+  skips stocks already more than 2.5 % from the previous close (listed, not debated), ranks the rest by strength vs NIFTY, debates the
+  top 5 and reports ONE. Mention the skipped big movers so the user sees them.
+- No stock named, swing: run the swing scan, then `python trader-debate/debate.py best swing SYM1,SYM2,...` on the top 3-5 candidates;
+  it debates each and reports ONE (`report.pick`: a BUY/SELL decision first, else the most verified evidence).
 - Paste the Markdown it prints. The decision is the Judge's; do not upgrade a NO TRADE. Evidence insufficient -> 🟡 WAIT / NO TRADE.
 - Keep headings with emojis, tables, simple language. Mark every number as LIVE, DELAYED or PAST SESSION; say what is NOT AVAILABLE.
 - Never invent prices or confirmation; never promise profit or a fixed win probability.

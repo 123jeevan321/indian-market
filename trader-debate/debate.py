@@ -8,6 +8,7 @@
     python trader-debate/debate.py reassess trader/debates/2026-11-12/<file>.json [--now "2026-11-12 11:30"]
     python trader-debate/debate.py report trader/debates/2026-11-12/<file>.json        # Three-Agent Trading Report (Markdown)
     python trader-debate/debate.py best intraday SBIN,ICICIBANK,TCS [--now ...]         # debate each, report ONE (see report.pick)
+    python trader-debate/debate.py morning [--at 10:35] [--top 5]                      # Nifty 500 scan -> rank -> debate top N -> ONE report
     add --report to run/reassess to print the Markdown report instead of the terminal panels
 
 Records go to trader/debates/YYYY-MM-DD/ (git-ignored) and are never edited after they are written; a reassessment is a new record
@@ -132,6 +133,7 @@ def main(argv=None):
     r.add_argument("--now"); r.add_argument("--no-angel", action="store_true"); r.add_argument("--state")
     s = sub.add_parser("show"); s.add_argument("path"); s.add_argument("--columns", action="store_true")
     rp = sub.add_parser("report"); rp.add_argument("path")
+    mo = sub.add_parser("morning"); mo.add_argument("--at"); mo.add_argument("--top", type=int, default=5); mo.add_argument("--no-angel", action="store_true")
     be = sub.add_parser("best"); be.add_argument("mode", choices=["intraday", "swing"]); be.add_argument("symbols")
     be.add_argument("--now"); be.add_argument("--no-angel", action="store_true")
     h = sub.add_parser("history"); h.add_argument("--date"); h.add_argument("--symbol")
@@ -145,6 +147,17 @@ def main(argv=None):
         with open(a.path, encoding="utf-8") as fh:
             print(report.report_md(json.load(fh)))
         return 0
+    if a.cmd == "morning":
+        import morning
+        c = morning.candidates(a.at, a.top)
+        print("Nifty 500 scan as of %s: %s scanned, %d opening-range breakouts, NIFTY %+.2f%%" % (c["as_of"], c["scanned"], c["hits"], c["nifty_change_pct"]))
+        print("Skipped, already moved more than 2.5%%: %s" % ", ".join("%s %+.1f%%" % x for x in c["already_moved"][:15]) or "none")
+        print("Debating the top %d: %s" % (len(c["top"]), ", ".join(c["top"])))
+        if not c["top"]:
+            print("NO TRADE: no breakout within the 2.5%% move limit.")
+            return 0
+        a.symbols, a.mode, a.now = ",".join(c["top"]), "intraday", ("%s %s" % (c["as_of"][:10], a.at) if a.at else None)
+        a.cmd = "best"
     if a.cmd == "best":
         recs = []
         for sym in [x.strip().upper() for x in a.symbols.split(",") if x.strip()]:

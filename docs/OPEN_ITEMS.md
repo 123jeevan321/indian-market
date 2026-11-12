@@ -8,7 +8,7 @@
 | Debate system stage 6: Claude (LLM) layer | not started (user chose engines first) | `ANTHROPIC_API_KEY` and a go-ahead |
 | Round 11 1-minute data for all 461 stocks | 131 of 461 fetched; continues tonight | optional: the 37 top movers (needed for the reports) are done |
 | Paper trading | day 1 logged (BAJFINANCE paper +Rs 99, real -Rs 29); day 2 is 13 Nov | user decision: live from Mon 16 Nov |
-| Intraday scan universe | 50 stocks; widening to the Nifty 500 was offered after the 12 Nov top gainers were missed | user decision |
+| Intraday scan universe | DONE: Nifty 500 via `debate.py morning` (about 2-4 minutes per run) | - |
 
 Completed today: Round 10 recorder v3 (watchdog), debate system stages 1-5a (`docs/DEBATE_SYSTEM_PLAN.md`, `docs/DEBATE_VALIDATION.md`),
 Three-Agent Trading Report format, Round 11 (10 reports, `docs/ROUND11_FINAL_CONCLUSION.md`).

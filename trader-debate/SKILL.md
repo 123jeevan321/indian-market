@@ -22,6 +22,7 @@ How it works (docs/DEBATE_SYSTEM_PLAN.md):
 
     python trader-debate/debate.py run intraday|swing SYMBOL --report      # Three-Agent Trading Report (Markdown)
     python trader-debate/debate.py best intraday|swing SYM1,SYM2,SYM3       # debate each, report ONE stock
+    python trader-debate/debate.py morning [--at HH:MM] [--top 5]            # Nifty 500 scan -> skip >2.5% movers -> debate top 5
     python trader-debate/debate.py report trader/debates/<day>/<record>.json
 
 STANDING FORMAT (CLAUDE.md): any Indian trading question gets ONE stock in the Three-Agent Trading Report produced by `--report`
