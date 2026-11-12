@@ -224,3 +224,48 @@ How to produce it (never write the sections by hand from memory):
 - Keep headings with emojis, tables, simple language. Mark every number as LIVE, DELAYED or PAST SESSION; say what is NOT AVAILABLE.
 - Never invent prices or confirmation; never promise profit or a fixed win probability.
 - Same format for intraday and swing. Unrelated questions get a normal answer.
+
+
+## Strict Trading Strategy Rules: Top 10 Strategy Priority Scanner (user directive, 2026-11-12)
+
+Whenever asked to find stocks, identify trading opportunities, provide buy/sell calls, or scan the Indian market, you MUST follow these 10 approved strategies in strict priority order. Do not introduce any other strategies or methods without explicit user approval.
+
+### Approved Top 10 Strategies & Priority Hierarchy
+| Priority | Strategy | Trading Type | Historical Win Rate | Net Result Reality |
+|---|---|---|---|---|
+| 1 | Gap-up ≥2% still rising at 09:30 on high volume → Buy at 09:30 | Intraday | 61.3% | 🟡 Not proven: 119 trades, negative in 2022-2024 |
+| 2 | Heavy-volume fall in the first 15 minutes → Short | Intraday | 52.0% | 🟡 Breakeven (+0.06%), flipped sign across periods |
+| 3 | Absorption: Heavy volume, flat price after rally → Short | Intraday | 51.2% | 🔴 Loses money (-0.32%) due to fat-tail losses |
+| 4 | Heavy-volume rise in the first 15 minutes → Buy | Intraday | 47.7% | 🔴 Zero edge, slightly negative after costs |
+| 5 | 20-day breakout | Swing | 46.9% | 🔴 Small loss (-₹39/trade) |
+| 6 | CHoCH (Change of Character / Trend Change) | Swing | 46.5% | 🔴 Closest to breakeven (-₹8/trade) |
+| 7 | Pullback in an established uptrend | Swing | 46.4% | 🔴 Loses (-₹84/trade) |
+| 8 | Gap-down still falling on volume → Short | Intraday | 45.3% | 🔴 Loses (-0.19%) |
+| 9 | Squeeze (Tight-range breakout) | Swing | 44.4% | 🔴 Loses (-₹116/trade) |
+| 10 | Sector-leader momentum | Next Day | 43.6% | 🔴 Loses in every tested year (-0.16%) |
+
+*Honesty note*: Win rates are historical and do NOT guarantee profit. None is proven consistently profitable after costs.
+
+### Strict Priority-Based Scanning Cascade
+1. **Universe**: Scan the ~500 liquid NSE equities universe.
+2. **Sequential Step-by-Step Execution**:
+   - Start at **Strategy #1**. Verify all conditions with real/timestamped data.
+   - If valid stocks qualify, shortlist, rank them, and **STOP**. Do NOT move to Strategy #2.
+   - Only advance to Strategy #2 if Strategy #1 yields ZERO valid setups.
+   - Continue sequentially through #10. Never skip or reorder. Stop at the first priority level with valid setups.
+3. **Real-Time Market Validation**:
+   - Verify current price, % change, gap %, volume vs historical avg, candle structure, entry, SL, targets, R:R, brokerage/statutory charges, valid/invalid status.
+   - If real-time data is unavailable, state **NOT VERIFIED**. Never invent or fabricate data.
+4. **Scanning Report Format**:
+   Always present the results using this table:
+   | Rank | Stock | Strategy No. | Strategy Name | Entry | Stop Loss | Target | Risk:Reward | Setup Status |
+   Followed by:
+   - Why this stock qualifies
+   - Which exact conditions are satisfied
+   - Current market confirmation
+   - Potential risks
+   - Whether the trade is worth considering
+5. **No-Trade Rule**:
+   - If none of the 10 strategies produces a valid setup, clearly report **NO TRADE**.
+   - Never force a trade, never lower strategy thresholds, and never suggest random stocks. Capital protection always overrides trade frequency.
+
