@@ -60,6 +60,7 @@ def build_plan(mode, direction, entry, stop, entry_kind, notes=()):
     """Entry/stop -> targets at fixed R multiples, size, costs, net reward-to-risk. direction: 'long' or 'short'."""
     c = CONFIG[mode]
     sgn = 1 if direction == "long" else -1
+    entry, stop = tick(entry, up=sgn > 0), tick(stop, up=sgn < 0)     # round first, so every number derives from quoted prices
     r = abs(entry - stop)
     qty, max_loss = size(mode, direction, entry, stop)
     # Targets are set NET of costs: T1 pays t1_r x (loss at stop incl. costs) after its own costs; T2 likewise at t2_r.
@@ -73,8 +74,8 @@ def build_plan(mode, direction, entry, stop, entry_kind, notes=()):
         net_t1 = round(abs(t1 - entry) * qty - round_trip(mode, qty, buy1, sell1), 2)
         net_t2 = round(abs(t2 - entry) * qty - round_trip(mode, qty, buy2, sell2), 2)
     chase = tick(entry * (1 + sgn * c["chase_pct"] / 100), up=sgn > 0)
-    return {"direction": direction, "entry": tick(entry, up=sgn > 0), "entry_kind": entry_kind,
-            "do_not_enter_past": chase, "stop": tick(stop, up=sgn < 0), "target1": t1, "target2": t2,
+    return {"direction": direction, "entry": entry, "entry_kind": entry_kind,
+            "do_not_enter_past": chase, "stop": stop, "target1": t1, "target2": t2,
             "risk_per_share": round(r, 2), "stop_pct": round(100 * r / entry, 2), "qty": qty,
             "position_value": round(qty * entry, 2), "max_loss_incl_costs": max_loss,
             "net_at_t1": net_t1, "net_at_t2": net_t2,

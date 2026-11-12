@@ -1,0 +1,5 @@
+{
+ "note": "Untouched-test (final 20%) records per setup, written by validate.py in stage 5. Empty means no setup is validated, so the Judge returns NO TRADE.",
+ "intraday": {},
+ "swing": {}
+}
