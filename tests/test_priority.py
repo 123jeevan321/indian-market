@@ -26,19 +26,24 @@ class Priority(unittest.TestCase):
         self.assertIn("D", [r["sym"] for r in h[4]])
         self.assertEqual([r["sym"] for r in h[8]], ["E"])
 
-    def test_status_uses_only_bars_ended_by_now(self):
+    def test_follow_through_rule(self):
         t = lambda hm: datetime.datetime.combine(DAY, datetime.time(*hm))
-        r = row("A", 0.03, 0.01, 2.5, after=[(t((9, 35)), 101, 101.2, 100.9, 101.1, 1), (t((10, 0)), 101, 101.1, 99.0, 99.5, 1)])
-        early = P.intraday_plan(r, "long", t((9, 36)), DAY)
-        late = P.intraday_plan(r, "long", t((10, 5)), DAY)
-        self.assertTrue(early["status"].startswith("VALID"))
-        self.assertEqual(late["status"], "INVALIDATED")
-        self.assertEqual(early["outcome_so_far"], "INVALIDATED")    # review field only
-        self.assertEqual(P.intraday_plan(r, "long", t((9, 20)), DAY)["status"], "WAIT")
+        bars = [(t((9, 35)), 101, 101.2, 100.9, 101.1, 1), (t((9, 40)), 101.1, 101.3, 101.0, 101.2, 1), (t((9, 45)), 101.2, 101.5, 101.1, 101.4, 1),
+                (t((10, 0)), 101.4, 101.5, 99.0, 99.5, 1)]
+        ok = row("A", 0.03, 0.01, 2.5, after=bars); ok.update(ft_rvol=1.3, ft_move=0.004, entry_0945=101.4)
+        faded = row("B", 0.03, 0.01, 2.5, after=bars); faded.update(ft_rvol=0.7, ft_move=0.004, entry_0945=101.4)
+        self.assertEqual(P.intraday_plan(ok, "long", t((9, 40)), DAY)["status"], "WAIT")            # before 09:45
+        self.assertTrue(P.intraday_plan(ok, "long", t((9, 46)), DAY)["status"].startswith("VALID"))
+        self.assertEqual(P.intraday_plan(ok, "long", t((9, 46)), DAY)["entry"], 101.4)             # entry = 09:45 open
+        self.assertEqual(P.intraday_plan(faded, "long", t((9, 46)), DAY)["status"], "NOT VALID")
+        self.assertEqual(P.intraday_plan(ok, "long", t((10, 5)), DAY)["status"], "INVALIDATED")     # stop traded in the 10:00 bar
+        self.assertEqual(P.intraday_plan(ok, "long", t((9, 46)), DAY)["outcome_so_far"], "INVALIDATED")
+        self.assertEqual(P.intraday_plan(ok, "long", t((9, 20)), DAY)["status"], "WAIT")
 
     def test_expired_after_entry_window(self):
         t = lambda hm: datetime.datetime.combine(DAY, datetime.time(*hm))
         r = row("A", 0.03, 0.01, 2.5, after=[(t((9, 35)), 101, 101.2, 100.9, 101.1, 1)])
+        r.update(ft_rvol=1.2, ft_move=0.003, entry_0945=101.1)
         self.assertEqual(P.intraday_plan(r, "long", t((11, 0)), DAY)["status"], "EXPIRED")
 
     def test_ten_strategies_in_order(self):

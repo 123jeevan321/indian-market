@@ -298,3 +298,9 @@ Data is Yahoo (delayed): say NOT VERIFIED against a live feed. Statuses: VALID /
 INVALIDATED / TARGET HIT / VALID, R:R BELOW 1.5. Card rule 1 (2.5 % move) is reported as a risk for #1 and #8, not used as a filter,
 because those strategies are defined by a gap. Never call any of the 10 profitable: none has fresh out-of-sample proof after costs.
 This framework replaces `debate.py morning` for "find me stocks" requests.
+Volume follow-through rule (user directive 12 Nov 2026, tested in research/round11_followthrough.py): an intraday setup found at 09:30 is
+checked again at 09:45. It stays VALID only if 09:30-09:45 volume is at least its 20-session average AND price kept moving the setup's
+way; then entry is the 09:45 open (window 09:45-10:00). Otherwise it is NOT VALID (volume faded): go to the next stock at the same
+priority, and to the next priority only when no stock at the current one is valid. Result on 5 years of Nifty 100: #1 -0.24 % -> +0.19 %
+per trade (212 trades; TEST +0.59 %, n 54), #4 -0.02 % -> +0.18 % (1,106 trades) - better, still not positive in every period.
+Volume cannot show WHO trades; never describe a fade as "institutions leaving". Shorts (#2, #3, #8) use the untested mirror.

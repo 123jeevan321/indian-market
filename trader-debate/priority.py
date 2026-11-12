@@ -26,10 +26,12 @@ sys.path.insert(0, HERE)
 import common as C, snapshot as S     # noqa: E402
 
 STRATEGIES = {
-    1: ("Gap-up >= 2% still rising at 09:30 on high volume", "Intraday", "long", 61.3, "+0.29 % (n 119; lost money in 2022-24)"),
+    1: ("Gap-up >= 2% still rising at 09:30 on high volume", "Intraday", "long", 61.3,
+        "+0.29 % (n 119; lost money in 2022-24). With the 09:45 volume follow-through rule: +0.19 % over 212 trades, TEST +0.59 % (n 54, 69 % wins)"),
     2: ("Heavy-volume fall in the first 15 minutes", "Intraday", "short", 52.0, "+0.06 % (about breakeven)"),
     3: ("Absorption: heavy volume, flat price after a rally", "Intraday", "short", 51.2, "-0.32 %"),
-    4: ("Heavy-volume rise in the first 15 minutes", "Intraday", "long", 47.7, "-0.04 %"),
+    4: ("Heavy-volume rise in the first 15 minutes", "Intraday", "long", 47.7,
+        "-0.04 %. With the 09:45 volume follow-through rule: +0.18 % over 1,106 trades, TEST +0.07 %, VALIDATION -0.07 %"),
     5: ("20-day breakout", "Swing", "long", 46.9, "-Rs 39 per trade"),
     6: ("CHoCH (change of character)", "Swing", "long", 46.5, "-Rs 8 per trade"),
     7: ("Pullback in an established uptrend", "Swing", "long", 46.4, "-Rs 84 per trade"),
@@ -38,7 +40,11 @@ STRATEGIES = {
     10: ("Sector-leader momentum", "Next day", "long", 43.6, "-0.16 %"),
 }
 INTRADAY_LEVELS = (1, 2, 3, 4, 8)
-ENTRY_WINDOW_MIN = 15          # an intraday setup decided at 09:30 is valid for entry until 09:45
+ENTRY_WINDOW_MIN = 15          # entry window after the 09:45 confirmation (09:45-10:00)
+# Volume follow-through rule (user directive 12 Nov 2026; tested in research/round11_followthrough.py for #1 and #4):
+# at 09:45 the 09:30-09:45 volume must be >= its 20-session average AND price must have kept moving the setup's way
+# (above the 09:30 price for longs, below for shorts). Otherwise the setup is NOT VALID (volume faded) and the scan moves to
+# the next stock, then the next level. Entry is the 09:45 bar's open. Shorts (#2, #3, #8) use the mirror, which is untested.
 UNIVERSE = os.path.join(ROOT, "trader", "universe.txt")
 DAILY_CACHE = os.path.join(ROOT, "trader", "cache", "swing-live")
 IND500 = os.path.join(ROOT, "research", "cache", "industry500.json")
@@ -85,9 +91,13 @@ def opening_row(sym, day):
     h15, l15, c15 = max(b[k][1] for k in range(3)), min(b[k][2] for k in range(3)), b[2][3]
     v15 = sum(b[k][4] for k in range(3))
     closes = [D[d][max(D[d])][3] for d in prev_days[-6:]]
+    ft_base = [sum(D[d][k][4] for k in (3, 4, 5)) for d in prev_days[-20:] if all(k in D[d] for k in (3, 4, 5))]
+    has_ft = all(k in b for k in (3, 4, 5))
     return {"sym": sym, "prev_close": prev_close, "open": o0, "gap": o0 / prev_close - 1, "r15": c15 / o0 - 1, "c15": c15,
             "tp15": (h15 + l15 + c15) / 3, "h15": h15, "l15": l15, "rvol15": v15 / (sum(base) / len(base)) if base and sum(base) else None,
             "ret5": closes[-1] / closes[0] - 1 if len(closes) >= 6 else None, "entry_open": b[3][0] if 3 in b else None,
+            "ft_rvol": (sum(b[k][4] for k in (3, 4, 5)) / (sum(ft_base) / len(ft_base))) if has_ft and ft_base and sum(ft_base) else None,
+            "ft_move": (b[5][3] / b[3][0] - 1) if has_ft else None, "entry_0945": b[6][0] if 6 in b else (b[5][3] if has_ft else None),
             "last": b[max(b)][3], "last_bar": "%02d:%02d" % divmod(555 + 5 * max(b) + 5, 60),
             "after": [(datetime.datetime.combine(day, datetime.time(9, 15)) + datetime.timedelta(minutes=5 * k + 5),) + b[k] for k in sorted(b) if k >= 3]}
 
@@ -114,8 +124,17 @@ def intraday_hits(rows):
 
 
 def intraday_plan(r, side, now_ist, day):
-    e = r["entry_open"] or r["c15"]
     sgn = 1 if side == "long" else -1
+    confirm_at = datetime.datetime.combine(day, datetime.time(9, 45))
+    ft_state, ft_why = None, None
+    if now_ist >= confirm_at:
+        if r.get("ft_rvol") is None or r.get("ft_move") is None:
+            ft_state, ft_why = "NO DATA", "09:30-09:45 bars unavailable"
+        elif r["ft_rvol"] >= 1.0 and sgn * r["ft_move"] > 0:
+            ft_state, ft_why = "CONFIRMED", "09:30-09:45 volume %.1fx usual, price %+.2f%%" % (r["ft_rvol"], 100 * r["ft_move"])
+        else:
+            ft_state, ft_why = "FADED", "09:30-09:45 volume %.1fx usual, price %+.2f%%" % (r["ft_rvol"], 100 * r["ft_move"])
+    e = (r.get("entry_0945") if ft_state == "CONFIRMED" else None) or r["entry_open"] or r["c15"]
     stop, tgt = C.tick(e * (1 - sgn * 0.01), up=sgn < 0), C.tick(e * (1 + sgn * 0.02), up=sgn > 0)
     qty = max(0, int(C.CONFIG["intraday"]["risk_inr"] // abs(e - stop)))
     while qty and abs(e - stop) * qty + C.round_trip("intraday", qty, min(e, stop), max(e, stop)) > C.CONFIG["intraday"]["risk_inr"]:
@@ -130,19 +149,24 @@ def intraday_plan(r, side, now_ist, day):
                 return "TARGET HIT", "target %.2f traded by %s; do not chase" % (tgt, end.strftime("%H:%M"))
         return None, None
     decided = datetime.datetime.combine(day, datetime.time(9, 30))
-    status, why = "VALID", "entry window 09:30-09:45 open"
+    trade_bars = [x for x in r["after"] if x[0] > confirm_at]                # bars after the 09:45 entry
     if now_ist < decided:
         status, why = "WAIT", "conditions are measured at 09:30"
+    elif now_ist < confirm_at:
+        status, why = "WAIT", "09:45 volume follow-through check pending (entry only if volume holds and price keeps moving)"
+    elif ft_state != "CONFIRMED":
+        status, why = "NOT VALID", "volume follow-through %s (%s)" % (ft_state.lower(), ft_why)
     else:
-        st, wy = walk([x for x in r["after"] if x[0] <= now_ist])          # only bars that had ended by now
+        status, why = "VALID", "follow-through confirmed (%s); entry window 09:45-10:00" % ft_why
+        st, wy = walk([x for x in trade_bars if x[0] <= now_ist])
         if st:
             status, why = st, wy
-        elif now_ist > decided + datetime.timedelta(minutes=ENTRY_WINDOW_MIN):
-            status, why = "EXPIRED", "entry was at 09:30; after 09:45 the tested setup no longer applies"
-    outcome, _ = walk(r["after"])
-    if outcome is None and r["after"]:
-        last_c = r["after"][-1][4]
-        outcome = "closed %+.2f%% (%s)" % (100 * sgn * (last_c / e - 1), "data to %s" % r["after"][-1][0].strftime("%H:%M"))
+        elif now_ist > confirm_at + datetime.timedelta(minutes=ENTRY_WINDOW_MIN):
+            status, why = "EXPIRED", "entry was at 09:45; after 10:00 the tested setup no longer applies"
+    outcome, _ = walk(trade_bars) if ft_state == "CONFIRMED" else ("not traded (%s)" % (ft_state or "pending").lower(), None)
+    if outcome is None and trade_bars:
+        last_c = trade_bars[-1][4]
+        outcome = "closed %+.2f%% (%s)" % (100 * sgn * (last_c / e - 1), "data to %s" % trade_bars[-1][0].strftime("%H:%M"))
     return {"entry": round(e, 2), "stop": stop, "target": tgt, "qty": qty, "max_loss": round(loss, 2), "net_at_target": round(gain, 2),
             "rr": round(gain / loss, 2) if loss else None, "costs_round_trip": round(C.round_trip("intraday", qty, e, tgt), 2) if qty else 0,
             "status": status if (gain / loss if loss else 0) >= 1.5 or status != "VALID" else "VALID, R:R BELOW 1.5",
@@ -257,11 +281,11 @@ def run(day=None, all_levels=False, limit=None):
     live = day is None
     day = day or now.date()
     if not live:
-        now = datetime.datetime.combine(day, datetime.time(9, 31))
+        now = datetime.datetime.combine(day, datetime.time(9, 46))          # replay just after the 09:45 confirmation
     syms = universe()[:limit] if limit else universe()
     lines = ["# 🎯 Top-10 Strategy Priority Scan", "", "| Session | Mode | Universe | Data |", "|---|---|---|---|",
              "| %s | %s | %d stocks (Nifty 500 lists) | Yahoo 5-minute and daily bars: DELAYED, unofficial; NOT VERIFIED against a live broker feed |" % (
-                 day, "live" if live else "replay (decision 09:30)", len(syms)), ""]
+                 day, "live" if live else "replay (as of 09:46, after the follow-through check)", len(syms)), ""]
     market_open = now.weekday() < 5 and datetime.time(9, 15) <= now.time() <= datetime.time(15, 30)
     if live and not market_open:
         lines.append("Market is closed now (%s IST); intraday levels are evaluated on the latest session for reference only." % now.strftime("%H:%M"))
@@ -287,16 +311,20 @@ def run(day=None, all_levels=False, limit=None):
                 swing = swing_hits(data, last)
                 swing["_asof"] = last
             rows, kind = swing[level], "swing"
-        evaluated.append((level, len(rows)))
+        live_rows = [r for r in rows if (r["plan"]["status"] if kind == "intraday" else "VALID").startswith(("VALID", "WAIT"))]
+        evaluated.append((level, len(rows), len(live_rows)))
         if rows:
             lines += ["## Priority %d: %s (%s), historical win rate %.1f%%, tested result %s" % (level, STRATEGIES[level][0], STRATEGIES[level][1],
                                                                                              STRATEGIES[level][3], STRATEGIES[level][4]), "",
                       table(level, rows[:10], kind), "", "**Why they qualify (exact conditions met):**", "", details(level, rows, kind), ""]
-            if found is None:
+            if live_rows and found is None:
                 found = level
-            if not all_levels:
+            if live_rows and not all_levels:
                 break
-    lines += ["**Levels checked in order:** " + ", ".join("#%d: %d" % x for x in evaluated)]
+            if not live_rows:
+                lines += ["No valid setup at priority %d (all %d not valid / expired / already resolved); moving to priority %d." % (
+                    level, len(rows), level + 1), ""]
+    lines += ["**Levels checked in order:** " + ", ".join("#%d: %d found, %d valid" % x for x in evaluated)]
     if ihits is not None:
         lines.append("Opening data available for %d of %d stocks." % (ihits["_coverage"], len(syms)))
     if found is None:
