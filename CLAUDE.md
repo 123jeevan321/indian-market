@@ -189,3 +189,15 @@ approval for that push. Do not change risk rules, `flat_by`, or the scope above 
 - Risk limits stay hard: ₹500 risk per trade (₹1,000 max) including costs, daily stop ₹2,000, reward-to-risk at least 1:1.5,
   no entries outside 09:30-14:45, flat by 15:15.
 - No averaging down and no widening stops. After the daily stop is hit, no more cards that day.
+
+## Card rules added after the BAJFINANCE review (2026-11-12)
+
+The 10:35 BAJFINANCE card was a mistake: the stock was already +3.2 % and 2.2 ATR(5m) above VWAP, Target 1 sat above the day high,
+the card had no maximum entry price, and the setup's out-of-sample expectancy was negative. Every card from now on must:
+1. Return NO TRADE when price is more than 1.5 ATR(5m) above VWAP (below, for shorts) or the stock is already more than 2.5 % from the
+   previous close in the trade direction.
+2. Carry a hard "do not buy above / do not sell below" price, about 0.1 % past the entry. A fill past it voids the card.
+3. Put Target 1 inside the day's range, or say plainly that it needs a new day high/low and that this lowers the hit rate.
+4. Include a stall exit: if Target 1 is not reached within 90 minutes, exit or move the stop to entry.
+5. Issue no new cards after 11:00 unless relative volume at that time is above 1.0x.
+6. Say NO TRADE when the setup's backtest is negative after costs, even when the user asks for a call.
