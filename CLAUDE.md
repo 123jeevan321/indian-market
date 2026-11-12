@@ -269,3 +269,32 @@ Whenever asked to find stocks, identify trading opportunities, provide buy/sell 
    - If none of the 10 strategies produces a valid setup, clearly report **NO TRADE**.
    - Never force a trade, never lower strategy thresholds, and never suggest random stocks. Capital protection always overrides trade frequency.
 
+
+
+## Top-10 strategy priority framework (user directive, 2026-11-12) - governs every stock search, scan or BUY/SELL call
+
+Only these 10 approved strategies, in this priority order; no other strategy unless the user approves it:
+
+| # | strategy | type | historical win rate (tested result) |
+|---|---|---|---|
+| 1 | Gap-up >= 2% still rising at 09:30 on high volume -> buy 09:30 | Intraday | 61.3 % (+0.29 %, n 119, lost money 2022-24) |
+| 2 | Heavy-volume fall in the first 15 minutes -> short | Intraday | 52.0 % (+0.06 %, breakeven) |
+| 3 | Absorption: heavy volume, flat price after a rally -> short | Intraday | 51.2 % (-0.32 %) |
+| 4 | Heavy-volume rise in the first 15 minutes -> buy | Intraday | 47.7 % (-0.04 %) |
+| 5 | 20-day breakout | Swing | 46.9 % (-Rs 39) |
+| 6 | CHoCH | Swing | 46.5 % (-Rs 8) |
+| 7 | Pullback in an established uptrend | Swing | 46.4 % (-Rs 84) |
+| 8 | Gap-down still falling on volume -> short | Intraday | 45.3 % (-0.19 %) |
+| 9 | Squeeze (tight-range breakout) | Swing | 44.4 % (-Rs 116) |
+| 10 | Sector-leader momentum | Next day | 43.6 % (-0.16 %) |
+
+Procedure: `python trader-debate/priority.py` (exact tested definitions are in its docstring). It scans the ~495-stock universe, checks
+#1 first and moves to the next level ONLY when the current one has zero valid setups; it stops at the first level with setups unless the
+user asks for all 10 (`--all`). Never skip or reorder levels; never loosen conditions; NO TRADE when no level qualifies.
+Presentation: state the session/date and whether the market is open; the table | Rank | Stock | Strategy No. | Strategy Name | Entry |
+Stop Loss | Target | Risk:Reward | Setup Status |; then why each qualifies, exact conditions met, current confirmation, risks, whether
+worth considering; then the Three-Agent Trading Report for the rank-1 stock (`debate.py run ... --report`).
+Data is Yahoo (delayed): say NOT VERIFIED against a live feed. Statuses: VALID / WAIT / EXPIRED (after 09:45 for intraday levels) /
+INVALIDATED / TARGET HIT / VALID, R:R BELOW 1.5. Card rule 1 (2.5 % move) is reported as a risk for #1 and #8, not used as a filter,
+because those strategies are defined by a gap. Never call any of the 10 profitable: none has fresh out-of-sample proof after costs.
+This framework replaces `debate.py morning` for "find me stocks" requests.

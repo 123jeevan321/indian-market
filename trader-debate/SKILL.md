@@ -25,6 +25,9 @@ How it works (docs/DEBATE_SYSTEM_PLAN.md):
     python trader-debate/debate.py morning [--at HH:MM] [--top 5]            # Nifty 500 scan -> skip >2.5% movers -> debate top 5
     python trader-debate/debate.py report trader/debates/<day>/<record>.json
 
+PRIORITY SCAN (CLAUDE.md, user directive): `python trader-debate/priority.py [--date YYYY-MM-DD] [--all]` - the 10 approved
+strategies in strict order; first level with valid setups wins; else NO TRADE.
+
 STANDING FORMAT (CLAUDE.md): any Indian trading question gets ONE stock in the Three-Agent Trading Report produced by `--report`
 or `best`: 🟢 Buyer, 🔴 Seller, ⚖️ Judge, 📊 Final Trade Report, in one response.
 
