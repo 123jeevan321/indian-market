@@ -20,6 +20,13 @@ How it works (docs/DEBATE_SYSTEM_PLAN.md):
 4. `judge.py` re-verifies every cited item, the plan arithmetic, the fatal challenges, the setup's untouched-test record
    (`stats.json`, filled by stage 5 validation) and the risk gate. It decides BUY, SELL or NO TRADE.
 
+    python trader-debate/debate.py run intraday|swing SYMBOL --report      # Three-Agent Trading Report (Markdown)
+    python trader-debate/debate.py best intraday|swing SYM1,SYM2,SYM3       # debate each, report ONE stock
+    python trader-debate/debate.py report trader/debates/<day>/<record>.json
+
+STANDING FORMAT (CLAUDE.md): any Indian trading question gets ONE stock in the Three-Agent Trading Report produced by `--report`
+or `best`: 🟢 Buyer, 🔴 Seller, ⚖️ Judge, 📊 Final Trade Report, in one response.
+
 Rules for presenting a debate in chat:
 - Show the timeline, the three panels and the Judge's reasons. Do not add a verdict of your own.
 - SELL intraday = MIS short squared off by 15:15. SELL swing = exit or avoid a long; never an overnight short.

@@ -6,6 +6,9 @@
     python trader-debate/debate.py show trader/debates/2026-11-12/<file>.json [--columns]
     python trader-debate/debate.py history [--date 2026-11-12] [--symbol BAJFINANCE]
     python trader-debate/debate.py reassess trader/debates/2026-11-12/<file>.json [--now "2026-11-12 11:30"]
+    python trader-debate/debate.py report trader/debates/2026-11-12/<file>.json        # Three-Agent Trading Report (Markdown)
+    python trader-debate/debate.py best intraday SBIN,ICICIBANK,TCS [--now ...]         # debate each, report ONE (see report.pick)
+    add --report to run/reassess to print the Markdown report instead of the terminal panels
 
 Records go to trader/debates/YYYY-MM-DD/ (git-ignored) and are never edited after they are written; a reassessment is a new record
 that names the earlier one in "reassesses".
@@ -128,12 +131,32 @@ def main(argv=None):
     r.add_argument("mode", choices=["intraday", "swing"]); r.add_argument("symbol")
     r.add_argument("--now"); r.add_argument("--no-angel", action="store_true"); r.add_argument("--state")
     s = sub.add_parser("show"); s.add_argument("path"); s.add_argument("--columns", action="store_true")
+    rp = sub.add_parser("report"); rp.add_argument("path")
+    be = sub.add_parser("best"); be.add_argument("mode", choices=["intraday", "swing"]); be.add_argument("symbols")
+    be.add_argument("--now"); be.add_argument("--no-angel", action="store_true")
     h = sub.add_parser("history"); h.add_argument("--date"); h.add_argument("--symbol")
     ra = sub.add_parser("reassess"); ra.add_argument("path"); ra.add_argument("--now"); ra.add_argument("--no-angel", action="store_true")
     ra.add_argument("--state")
     r.add_argument("--columns", action="store_true"); ra.add_argument("--columns", action="store_true")
+    r.add_argument("--report", action="store_true"); ra.add_argument("--report", action="store_true")
     a = p.parse_args(argv)
-    import render
+    import render, report
+    if a.cmd == "report":
+        with open(a.path, encoding="utf-8") as fh:
+            print(report.report_md(json.load(fh)))
+        return 0
+    if a.cmd == "best":
+        recs = []
+        for sym in [x.strip().upper() for x in a.symbols.split(",") if x.strip()]:
+            if a.mode == "intraday":
+                snap = SNAP.intraday(sym, datetime.datetime.strptime(a.now, "%Y-%m-%d %H:%M") if a.now else None, use_angel=not a.no_angel)
+            else:
+                snap = SNAP.swing(sym, datetime.date.fromisoformat(a.now[:10]) if a.now else None)
+            rec = run(snap)
+            print("saved", save(rec), "->", rec["decision"])
+            recs.append(rec)
+        print(report.report_md(report.pick(recs)))
+        return 0
     if a.cmd == "history":
         print(render.history_table(history(a.date, a.symbol)))
         return 0
@@ -157,7 +180,7 @@ def main(argv=None):
         print("saved", save(rec))
         if prev:
             print("reassessment of %s: %s -> %s" % (prev["id"], prev.get("decision"), rec["decision"]))
-    print(render.render(rec, columns=a.columns))
+    print(report.report_md(rec) if getattr(a, "report", False) else render.render(rec, columns=a.columns))
     return 0
 
 

@@ -201,3 +201,23 @@ the card had no maximum entry price, and the setup's out-of-sample expectancy wa
 4. Include a stall exit: if Target 1 is not reached within 90 minutes, exit or move the stop to entry.
 5. Issue no new cards after 11:00 unless relative volume at that time is above 1.0x.
 6. Say NO TRADE when the setup's backtest is negative after costs, even when the user asks for a call.
+
+
+## Standing response format: Three-Agent Trading Report (user directive, 2026-11-12)
+
+Whenever the user asks about Indian stock-market trading (a stock, BUY/SELL calls, intraday opportunities or swing trades), answer
+with ONE stock in the Three-Agent Trading Report, all four sections in the SAME response, in this order:
+
+1. 🟢 BUYER AGENT: BULLISH VIEW (why it may go up: evidence, entry, stop-loss, targets, risks)
+2. 🔴 SELLER AGENT: BEARISH VIEW (why it may go down: evidence, entry, stop-loss, targets, risks)
+3. ⚖️ JUDGE AGENT: FINAL DECISION: 🟢 BUY, 🔴 SELL or 🟡 WAIT / NO TRADE, why it chose that and rejected the other side
+4. 📊 FINAL TRADE REPORT: entry, stop-loss, targets, reward-to-risk, timeframe, confidence from tested history, invalidation
+
+How to produce it (never write the sections by hand from memory):
+- One named stock: `python trader-debate/debate.py run intraday|swing SYMBOL --report`
+- No stock named: scan first (trader-scanner / trader-swing), then `python trader-debate/debate.py best intraday|swing SYM1,SYM2,...`
+  on the top 3-5 candidates; it debates each and reports ONE (`report.pick`: a BUY/SELL decision first, else the most verified evidence).
+- Paste the Markdown it prints. The decision is the Judge's; do not upgrade a NO TRADE. Evidence insufficient -> 🟡 WAIT / NO TRADE.
+- Keep headings with emojis, tables, simple language. Mark every number as LIVE, DELAYED or PAST SESSION; say what is NOT AVAILABLE.
+- Never invent prices or confirmation; never promise profit or a fixed win probability.
+- Same format for intraday and swing. Unrelated questions get a normal answer.
