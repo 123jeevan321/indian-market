@@ -37,6 +37,9 @@ SNAP_QUOTE = 3
 MAX_SYMBOLS = 25
 
 
+STALL_S = 60  # seconds without any packet in market hours before a forced reconnect
+
+
 def ist_now():
     return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(hours=5.5)
 
@@ -236,16 +239,29 @@ def cmd_record(a):
         ws.on_open, ws.on_data, ws.on_error, ws.on_close = on_open, on_data, on_error, on_close
         t = threading.Thread(target=ws.connect, daemon=True)
         t.start()
+        stalled = False
         while t.is_alive() and ist_now() < stop_at:
             time.sleep(1)
+            n_ = ist_now().time()
+            # Watchdog: in market hours a silent socket (no packets for STALL_S seconds) is torn down and rebuilt with a fresh
+            # login. On 2026-11-12 the SDK kept a dead socket open from 09:13 to 09:52 without raising any error.
+            if datetime.time(9, 16) <= n_ <= datetime.time(15, 29) and state["last_tick"] and time.time() - state["last_tick"] > STALL_S:
+                note("STALL: no packets for %.0f s in market hours; forcing a fresh login" % (time.time() - state["last_tick"]))
+                stalled = True
+                try:
+                    ws.close_connection()
+                except Exception:
+                    pass
+                state["last_tick"] = time.time()
+                break
         if ist_now() >= stop_at:
             try:
                 ws.close_connection()
             except Exception:
                 pass
             break
-        note("connection thread ended; reconnecting in 10 s")
-        time.sleep(10)
+        note("%s; reconnecting in 5 s" % ("stalled socket closed" if stalled else "connection thread ended"))
+        time.sleep(5)
     with lock:
         for f in files.values():
             f.flush(); f.close()
@@ -339,7 +355,7 @@ def cmd_quality(a):
     if not os.path.isdir(folder):
         raise SystemExit("no recording folder %s" % folder)
     print("Recording %s" % folder)
-    print("  %-11s %8s %9s %10s %12s %14s %8s" % ("symbol", "rows", "rows/min", "gaps>30s", "max gap s", "clock offs ms", "crossed"))
+    print("  %-11s %8s %9s %10s %12s %14s %8s %12s" % ("symbol", "rows", "rows/min", "gaps>30s", "max gap s", "clock offs ms", "crossed", "missing min"))
     for f in sorted(os.listdir(folder)):
         if not f.endswith(".jsonl"):
             continue
@@ -348,16 +364,20 @@ def cmd_quality(a):
             continue
         recv = [datetime.datetime.fromisoformat(t["recv"]) for t in ticks]
         mkt = [r for r in recv if datetime.time(9, 15) <= r.time() <= datetime.time(15, 30)]
-        gaps = [(b - a_).total_seconds() for a_, b in zip(mkt, mkt[1:])]
+        day = recv[0].date()
+        # Count the session edges too: a late first packet or an early last one is a gap (missed in v2 of this report).
+        edges = [datetime.datetime.combine(day, datetime.time(9, 15))] + mkt + [datetime.datetime.combine(day, datetime.time(15, 30))]
+        gaps = [(b - a_).total_seconds() for a_, b in zip(edges, edges[1:])]
+        missing = sum(g for g in gaps if g > 60)
         offs = []
         for t, r in zip(ticks, recv):
             if t.get("exch_ts"):
                 ex = datetime.datetime(1970, 1, 1) + datetime.timedelta(milliseconds=t["exch_ts"]) + datetime.timedelta(hours=5.5)
                 offs.append((r - ex).total_seconds() * 1000)
         crossed = sum(1 for t in ticks if t["bids"] and t["asks"] and t["bids"][0][0] >= t["asks"][0][0])
-        mins = max(1.0, (mkt[-1] - mkt[0]).total_seconds() / 60) if len(mkt) > 1 else 1.0
-        print("  %-11s %8d %9.1f %10d %12.0f %14.0f %8d" % (f[:-6], len(ticks), len(mkt) / mins, sum(1 for g in gaps if g > 30),
-                                                         max(gaps) if gaps else 0, sorted(offs)[len(offs) // 2] if offs else 0, crossed))
+        mins = 375.0 - missing / 60
+        print("  %-11s %8d %9.1f %10d %12.0f %14.0f %8d %12.1f" % (f[:-6], len(ticks), len(mkt) / max(1.0, mins),
+              sum(1 for g in gaps if g > 30), max(gaps) if gaps else 0, sorted(offs)[len(offs) // 2] if offs else 0, crossed, missing / 60))
     log = os.path.join(folder, "_session.log")
     if os.path.exists(log):
         print("Session log:")

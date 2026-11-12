@@ -18,4 +18,4 @@ Checked every day with `python trader-flows/angel_recorder.py quality --date YYY
 | date | symbols | rows | median rows/min | days with gaps > 60 s | reconnects | notes |
 |---|---|---|---|---|---|---|
 | 2026-11-12 (after-hours test, 00:29) | 3 | 3 | n/a | n/a | 0 | one snapshot per symbol after the close, as expected; `exch_ts` = last feed time (16:08:11 IST on 11 Nov) |
-| 2026-11-12 (first session) | 25 | pending | pending | pending | pending | scheduled |
+| 2026-11-12 (first session) | 25 | 557,810 (139,834 duplicates skipped) | 36-96 per symbol (median ~66) | YES: feed silent 09:13-09:52 (37.3 min of market time lost, opening missed) | 0 forced; the SDK reconnected itself at 09:52 without raising an error | Session FLAGGED: drop 09:15-09:52 from every test. Crossed books (~240-390 per symbol) occur only in pre-open (09:08-09:09) and 15:20-15:30, excluded by rule 4; treat 15:20-15:30 as suspect. Median clock offset 218-247 ms. Fix: v3 watchdog forces a fresh login after 60 s of silence in market hours; the quality report now counts gaps at the 09:15 and 15:30 edges (v2 missed this one) |
