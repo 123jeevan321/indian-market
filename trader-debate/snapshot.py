@@ -195,8 +195,23 @@ def futures(sym, before, close_unadj=None):
              "NSE F&O bhavcopy (cached; previous session, published after the close)", b["d"].isoformat(), "HISTORICAL")
 
 
+def recorder_active(now=None, folder=None):
+    """True when the Round 10 order-flow recorder wrote its session log in the last 3 minutes. A second Angel login might end the
+    recorder's session (UNVERIFIED whether Angel allows two), so live debates do not log in while it runs."""
+    now = now or ist_now()
+    folder = folder or os.path.join(ROOT, "trader", "ticks_r10", now.strftime("%Y-%m-%d"))
+    try:
+        newest = max(os.path.getmtime(os.path.join(folder, f)) for f in os.listdir(folder))
+    except (OSError, ValueError):
+        return False
+    return datetime.datetime.now().timestamp() - newest < 180
+
+
 def angel_live(sym):
     """Best bid/ask, total buy/sell quantity and the 09:15-09:18 one-minute candles from Angel One (read-only)."""
+    if recorder_active():
+        why = "skipped: the Round 10 recorder is running and a second Angel login could disconnect it"
+        return NA(why), NA(why)
     try:
         rec = _load("trader-flows/angel_recorder.py", "rec")
         tok = rec.tokens_for([sym]).get(sym)

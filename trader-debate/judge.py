@@ -100,8 +100,9 @@ def _fatal_checks(snapshot, side, case, opp_challenges, stats):
         elif cid[1] == "2":                                  # late / extended entry
             ext = E.recompute(snapshot, side, "X_EXTENDED")
             mov = E.recompute(snapshot, side, "X_MOVED")
-            if (ext and ext["status"] == "FLAG") or (mov and mov["status"] == "FLAG" and cid.endswith("b")):
-                stand.append({"id": cid, "text": ch["text"], "judge": "upheld: the extension flag reproduces"})
+            flag = mov if cid.endswith("b") else ext            # S2b/B2b = move already done; S2/B2 = stretched from VWAP
+            if flag and flag["status"] == "FLAG":
+                stand.append({"id": cid, "text": ch["text"], "judge": "upheld: %s reproduces (%s)" % (flag["id"], flag["observed"])})
     return stand
 
 
@@ -109,6 +110,10 @@ def _assess(snapshot, side, case, opp_challenges, stats, state):
     a = {"side": side, "case": case.get("stance"), "setup": case.get("setup")}
     if case.get("stance") not in ("BUY CASE", "SELL CASE"):
         a.update(passed=False, reasons=[case.get("reason") or case.get("error") or "no case made"], kept=[], struck=[])
+        return a
+    if case.get("snapshot_hash") != snapshot.get("hash"):
+        a.update(passed=False, reasons=["case was built on snapshot %s, not the debate's snapshot %s" % (
+            case.get("snapshot_hash"), snapshot.get("hash"))], kept=[], struck=[])
         return a
     kept, struck = _verify_evidence(snapshot, side, case)
     plan_probs, plan = _verify_plan(snapshot, case)
@@ -146,6 +151,19 @@ def _change_triggers(snapshot, ab, asl):
     return sorted(set(out))
 
 
+MAX_AGE_MIN = 10
+
+
+def data_age_minutes(snapshot):
+    """Minutes between the snapshot time and the end of the last price bar it used (intraday). None if unknown."""
+    f = snapshot["fields"].get("price") or {}
+    try:
+        asof = datetime.datetime.strptime(f["as_of"][:16], "%Y-%m-%d %H:%M")
+        return (datetime.datetime.fromisoformat(snapshot["snapshot_time_ist"]) - asof).total_seconds() / 60
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def decide(snapshot, buyer_case, seller_case, buyer_challenges, seller_challenges, buyer_responses, seller_responses,
            stats=None, state=None):
     stats = load_stats() if stats is None else stats
@@ -159,6 +177,9 @@ def decide(snapshot, buyer_case, seller_case, buyer_challenges, seller_challenge
         out.update(decision="NO TRADE", why="debate incomplete: %s failed; a one-sided debate never produces a signal" % ", ".join(failed))
     elif snapshot.get("unavailable") and "price" in snapshot["unavailable"]:
         out.update(decision="NO TRADE", why="price data unavailable")
+    elif snapshot["mode"] == "intraday" and (data_age_minutes(snapshot) is None or data_age_minutes(snapshot) > MAX_AGE_MIN):
+        out.update(decision="NO TRADE", why="price data is %s minutes old at debate time (limit %d): unreliable for an intraday entry"
+                   % ("an unknown number of" if data_age_minutes(snapshot) is None else "%.0f" % data_age_minutes(snapshot), MAX_AGE_MIN))
     else:
         winners = [a for a in (ab, asl) if a["passed"]]
         if len(winners) == 2:

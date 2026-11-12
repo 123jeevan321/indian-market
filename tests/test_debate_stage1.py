@@ -84,7 +84,8 @@ class Evidence(unittest.TestCase):
 class ReadOnly(unittest.TestCase):
     def test_no_order_functions_in_debate_package(self):
         for path in glob.glob(os.path.join(ROOT, "trader-debate", "*.py")):
-            src = open(path, encoding="utf-8").read()
+            with open(path, encoding="utf-8") as fh:
+                src = fh.read()
             for bad in ("placeOrder", "modifyOrder", "cancelOrder", "gttCreateRule", "gttModifyRule", "place_order"):
                 self.assertNotIn(bad, src, "%s mentions %s" % (os.path.basename(path), bad))
 

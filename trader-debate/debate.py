@@ -25,14 +25,16 @@ def now_ist():
 
 def guarded(fn, agent, *args):
     """Run one agent step with a timeout. A failure or timeout becomes an explicit AGENT FAILED record, never a signal."""
-    with cf.ThreadPoolExecutor(max_workers=1) as ex:
-        fut = ex.submit(fn, *args)
-        try:
-            return fut.result(timeout=TIMEOUT_S), None
-        except cf.TimeoutError:
-            return None, "%s timed out after %d s" % (agent, TIMEOUT_S)
-        except Exception as e:
-            return None, "%s raised %s: %s" % (agent, type(e).__name__, str(e)[:200]) + "\n" + traceback.format_exc(limit=3)
+    ex = cf.ThreadPoolExecutor(max_workers=1)
+    fut = ex.submit(fn, *args)
+    try:
+        return fut.result(timeout=TIMEOUT_S), None
+    except cf.TimeoutError:
+        return None, "%s timed out after %d s" % (agent, TIMEOUT_S)
+    except Exception as e:
+        return None, "%s raised %s: %s" % (agent, type(e).__name__, str(e)[:200]) + "\n" + traceback.format_exc(limit=3)
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)   # never wait for a stuck agent (a hung thread is abandoned, not joined)
 
 
 def run(snapshot, state=None, stats=None, reassesses=None):
@@ -57,14 +59,14 @@ def run(snapshot, state=None, stats=None, reassesses=None):
         scase = {"agent": "SELLER", "stance": "AGENT FAILED", "error": err_s, "evidence_cited": []}
     say(3, "SELLER", "initial_case", scase)
     # STEP 4 is the display of both initial cases (render). STEPS 5-6: challenges.
-    bch, e1 = guarded(buyer.challenge, "BUYER", bcase, scase, snapshot) if not err_b else ([], None)
+    bch, e1 = guarded(buyer.challenge, "BUYER", copy.deepcopy(bcase), copy.deepcopy(scase), copy.deepcopy(snapshot)) if not err_b else ([], None)
     say(5, "BUYER", "challenges", bch if not e1 else {"error": e1})
-    sch, e2 = guarded(seller.challenge, "SELLER", scase, bcase, snapshot) if not err_s else ([], None)
+    sch, e2 = guarded(seller.challenge, "SELLER", copy.deepcopy(scase), copy.deepcopy(bcase), copy.deepcopy(snapshot)) if not err_s else ([], None)
     say(6, "SELLER", "challenges", sch if not e2 else {"error": e2})
     # STEP 7: responses to the challenges received.
-    bresp, e3 = guarded(buyer.respond, "BUYER", bcase, sch or [], snapshot) if not err_b else ([], None)
+    bresp, e3 = guarded(buyer.respond, "BUYER", copy.deepcopy(bcase), copy.deepcopy(sch or []), copy.deepcopy(snapshot)) if not err_b else ([], None)
     say(7, "BUYER", "responses", bresp if not e3 else {"error": e3})
-    sresp, e4 = guarded(seller.respond, "SELLER", scase, bch or [], snapshot) if not err_s else ([], None)
+    sresp, e4 = guarded(seller.respond, "SELLER", copy.deepcopy(scase), copy.deepcopy(bch or []), copy.deepcopy(snapshot)) if not err_s else ([], None)
     say(7, "SELLER", "responses", sresp if not e4 else {"error": e4})
     if any((e1, e2, e3, e4)):
         for c, e in ((bcase, e1 or e3), (scase, e2 or e4)):

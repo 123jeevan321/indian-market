@@ -17,6 +17,7 @@ def snap(t="2026-01-05T10:00:00", **over):
     over.setdefault("levels", ROOMY)
     s = intraday_snap(atr_5m=F(0.3), **over)
     s["snapshot_time_ist"], s["hash"], s["unavailable"] = t, "synthetic", []
+    s["fields"]["price"]["as_of"] = t.replace("T", " ")[:16]     # fresh bar unless a test says otherwise
     return s
 
 
@@ -83,6 +84,61 @@ class Judge(unittest.TestCase):
                   "rejected_arguments", "what_would_change_it"):
             self.assertIn(k, v)
         self.assertTrue(v["what_would_change_it"])
+
+
+class ReviewFixes(unittest.TestCase):
+    def test_timeout_returns_without_waiting_for_stuck_agent(self):
+        import time
+        old = debate.TIMEOUT_S
+        debate.TIMEOUT_S = 0.3
+        try:
+            t = time.time()
+            res, err = debate.guarded(lambda: time.sleep(3), "X")
+            self.assertLess(time.time() - t, 1.5)
+            self.assertIsNone(res)
+            self.assertIn("timed out", err)
+        finally:
+            debate.TIMEOUT_S = old
+
+    def test_stale_price_means_no_trade(self):
+        s = snap()
+        s["fields"]["price"]["as_of"] = "2026-01-05 09:40"            # 20 minutes old at 10:00
+        _, v = verdict(s, stats=GOOD)
+        self.assertEqual(v["decision"], "NO TRADE")
+        self.assertIn("minutes old", v["why"])
+
+    def test_case_from_another_snapshot_is_rejected(self):
+        s = snap()
+        b = buyer.analyse(s)
+        b["snapshot_hash"] = "other"
+        a = judge._assess(s, "buy", b, [], GOOD, None)
+        self.assertFalse(a["passed"])
+        self.assertIn("not the debate's snapshot", a["reasons"][0])
+
+    def test_agents_cannot_alter_what_the_judge_sees(self):
+        orig = seller.challenge
+        def vandal(own, other, snapshot):
+            other["evidence_cited"].clear(); snapshot["fields"].clear()
+            return []
+        try:
+            seller.challenge = vandal
+            rec, v = verdict(snap(), stats=GOOD)
+        finally:
+            seller.challenge = orig
+        self.assertEqual(v["decision"], "BUY")
+        self.assertTrue(rec["snapshot"]["fields"])
+
+    def test_moved_challenge_uses_its_own_flag(self):
+        s = snap(day_change_pct=F(1.0))
+        ch = [{"id": "S2b", "fatal": True, "text": "x"}]
+        self.assertEqual(judge._fatal_checks(s, "buy", {"setup": "I_PDL"}, ch, GOOD), [])
+
+    def test_angel_skipped_while_recorder_writes(self):
+        import snapshot as S
+        with tempfile.TemporaryDirectory() as d:
+            open(os.path.join(d, "_session.log"), "w").close()
+            self.assertTrue(S.recorder_active(folder=d))
+        self.assertFalse(S.recorder_active(folder=os.path.join(ROOT, "no-such-folder")))
 
 
 class Debate(unittest.TestCase):
