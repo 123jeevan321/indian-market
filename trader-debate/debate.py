@@ -26,7 +26,13 @@ def now_ist():
 
 
 def guarded(fn, agent, *args):
-    """Run one agent step with a timeout. A failure or timeout becomes an explicit AGENT FAILED record, never a signal."""
+    """Run one agent step with a timeout. A failure or timeout becomes an explicit AGENT FAILED record, never a signal.
+    TIMEOUT_S = None runs the step directly (historical replay: no threads, same exception handling)."""
+    if TIMEOUT_S is None:
+        try:
+            return fn(*args), None
+        except Exception as e:
+            return None, "%s raised %s: %s" % (agent, type(e).__name__, str(e)[:200])
     ex = cf.ThreadPoolExecutor(max_workers=1)
     fut = ex.submit(fn, *args)
     try:

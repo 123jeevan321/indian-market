@@ -104,25 +104,38 @@ def sector_strength(sym, asof_ist):
              str(asof_ist), "DELAYED" if intraday_t else "HISTORICAL")
 
 
-def nse_file(kind, before):
-    """Latest cached NSE delivery/futures file dated strictly before `before` -> (date, {sym: [rows]})."""
-    folder = os.path.join(NSE_CACHE, kind)
-    try:
-        names = sorted(f for f in os.listdir(folder) if f.endswith(".csv") and f[:8] < before.strftime("%Y%m%d"))
-    except OSError:
-        return None, {}
-    for name in reversed(names):
-        path = os.path.join(folder, name)
-        if os.path.getsize(path) < 10:
-            continue
+_NAMES, _TABLES = {}, {}
+
+
+def _nse_names(kind):
+    """Sorted cached NSE file names for 'deliv' or 'fut' (memoised; one directory listing per process)."""
+    if kind not in _NAMES:
+        folder = os.path.join(NSE_CACHE, kind)
+        try:
+            _NAMES[kind] = sorted(f for f in os.listdir(folder) if f.endswith(".csv") and os.path.getsize(os.path.join(folder, f)) > 10)
+        except OSError:
+            _NAMES[kind] = []
+    return _NAMES[kind]
+
+
+def _nse_table(kind, name):
+    """{sym: [rows]} for one cached NSE file (memoised, so a 5-year replay reads each file once)."""
+    key = (kind, name)
+    if key not in _TABLES:
         import csv
-        table = {}
-        with open(path, encoding="utf-8") as fh:
+        t = {}
+        with open(os.path.join(NSE_CACHE, kind, name), encoding="utf-8") as fh:
             for row in csv.DictReader(fh):
-                table.setdefault(row.get("sym"), []).append(row)
-        if table:
-            return datetime.datetime.strptime(name[:8], "%Y%m%d").date(), table
-    return None, {}
+                t.setdefault(row.get("sym"), []).append(row)
+        _TABLES[key] = t
+    return _TABLES[key]
+
+
+def _before(kind, before, n):
+    import bisect
+    names = _nse_names(kind)
+    i = bisect.bisect_left(names, before.strftime("%Y%m%d"))
+    return names[max(0, i - n):i]
 
 
 def num(x):
@@ -133,25 +146,21 @@ def num(x):
 
 
 def delivery(sym, before, n=20):
-    """Previous sessions' delivery % (NSE sec_bhavdata_full cache): last value and its 20-session average."""
-    folder = os.path.join(NSE_CACHE, "deliv")
-    try:
-        names = sorted(f for f in os.listdir(folder) if f.endswith(".csv") and f[:8] < before.strftime("%Y%m%d"))[-n:]
-    except OSError:
-        return NA("no NSE delivery cache")
-    import csv
+    """Previous sessions' delivery % (NSE sec_bhavdata_full cache): last value and its 20-session average. Files dated before
+    `before` only (each is published after that session's close)."""
+    names = _before("deliv", before, n)
+    if not names:
+        return NA("no NSE delivery cache before %s" % before)
     series = []
     for name in names:
-        with open(os.path.join(folder, name), encoding="utf-8") as fh:
-            for row in csv.DictReader(fh):
-                if row.get("sym") == sym:
-                    series.append((name[:8], num(row.get("deliv_pct")), num(row.get("deliv_qty"))))
-                    break
-    series = [s for s in series if s[1] is not None]
+        rows = _nse_table("deliv", name).get(sym)
+        if rows:
+            series.append((name[:8], num(rows[0].get("deliv_pct")), num(rows[0].get("deliv_qty"))))
+    series = [x for x in series if x[1] is not None]
     if not series:
         return NA("no delivery rows for %s before %s" % (sym, before))
     last = series[-1]
-    avg = sum(s[1] for s in series[:-1]) / max(1, len(series) - 1)
+    avg = sum(x[1] for x in series[:-1]) / max(1, len(series) - 1)
     stale = (before - datetime.datetime.strptime(last[0], "%Y%m%d").date()).days > 4
     return F({"last_pct": last[1], "avg_pct_prior": round(avg, 2), "sessions": len(series), "last_date": last[0],
               "stale": stale}, "NSE sec_bhavdata_full (cached; published after each close)", last[0], "HISTORICAL")
@@ -159,17 +168,9 @@ def delivery(sym, before, n=20):
 
 def futures(sym, before, close_unadj=None):
     """Previous sessions' total futures OI change (1 and 5 sessions), near-month premium, price/OI build-up label."""
-    folder = os.path.join(NSE_CACHE, "fut")
-    try:
-        names = sorted(f for f in os.listdir(folder) if f.endswith(".csv") and f[:8] < before.strftime("%Y%m%d"))[-7:]
-    except OSError:
-        return NA("no NSE futures cache")
-    import csv
     days = []
-    for name in names:
-        rows = []
-        with open(os.path.join(folder, name), encoding="utf-8") as fh:
-            rows = [r for r in csv.DictReader(fh) if r.get("sym") == sym]
+    for name in _before("fut", before, 7):
+        rows = _nse_table("fut", name).get(sym) or []
         if rows:
             d = datetime.datetime.strptime(name[:8], "%Y%m%d").date()
             oi = sum(num(r["oi"]) or 0 for r in rows)
@@ -356,39 +357,45 @@ def swing(sym, asof=None):
     now = ist_now()
     if asof is None:
         asof = now.date() if now.time() >= datetime.time(15, 35) else now.date() - datetime.timedelta(days=1)
-    snap = {"symbol": sym, "mode": "swing", "snapshot_time_ist": now.isoformat(timespec="seconds"),
-            "bars_through": asof.isoformat(), "version": VERSION, "fields": {}}
-    f = snap["fields"]
     b = [x for x in SW.bars_from(SW.yahoo_daily(sym) or {}) if x["d"] <= asof]
     nb = [x for x in SW.bars_from(SW.yahoo_daily("^NSEI") or {}) if x["d"] <= asof]
+    if len(b) >= 220 and len(nb) >= 220:
+        SW.enrich(b); SW.enrich(nb)
+    return swing_from_bars(sym, b, nb, asof, now.isoformat(timespec="seconds"), "Yahoo daily (unofficial, adjusted)",
+                           sector_strength(sym, asof), SW.regime_map(nb) if len(nb) >= 220 else {})
+
+
+def swing_from_bars(sym, b, nb, asof, snap_time, src, sector_field, regime):
+    """Swing snapshot from ENRICHED daily bars already cut at `asof` (b[-1] is the last completed bar). Shared by live debates and
+    the historical replay (validate.py), so both see exactly the same fields."""
+    snap = {"symbol": sym, "mode": "swing", "snapshot_time_ist": snap_time, "bars_through": asof.isoformat(), "version": VERSION, "fields": {}}
+    f = snap["fields"]
     if len(b) < 220 or len(nb) < 220:
         f["price"] = NA("fewer than 220 daily bars (stock %d, NIFTY %d)" % (len(b), len(nb)))
         return finish(snap)
-    SW.enrich(b); SW.enrich(nb)
-    x, src, d = b[-1], "Yahoo daily (unofficial, adjusted)", b[-1]["d"].isoformat()
-    closes = [y["c"] for y in b]
+    x, d = b[-1], b[-1]["d"].isoformat()
+    closes = [y["c"] for y in b[-120:]]
     f["price"] = F(round(x["c"], 2), src, d, "HISTORICAL")
     f["daily"] = F({"open": rnd(x["o"]), "high": rnd(x["h"]), "low": rnd(x["l"]), "close": rnd(x["c"]),
                     "change_pct": rnd(100 * (x["c"] / b[-2]["c"] - 1)), "close_in_range": rnd(SW.pos_in_range(x)),
                     "rvol": rnd(x["rvol"]), "avg_traded_value_cr": rnd(x["avgval"] / 1e7, 1)}, src, d, "HISTORICAL")
     f["trend"] = F({"ema20": rnd(x["e20"]), "ema50": rnd(x["e50"]), "ema200": rnd(x["e200"]), "atr14": rnd(x["atr"]),
-                    "rsi14": rnd(SC.rsi(closes[-120:])), "adx14_pdi_mdi": adx(b[-120:]),
+                    "rsi14": rnd(SC.rsi(closes)), "adx14_pdi_mdi": adx(b[-120:]),
                     "ret5_pct": rnd(100 * (x["c"] / b[-6]["c"] - 1)), "ret20_pct": rnd(100 * (x["c"] / b[-21]["c"] - 1)),
                     "high20": rnd(max(y["h"] for y in b[-21:-1])), "low20": rnd(min(y["l"] for y in b[-21:-1])),
                     "high250": rnd(max(y["h"] for y in b[-250:])), "low250": rnd(min(y["l"] for y in b[-250:]))}, src, d, "HISTORICAL")
-    f["weekly"] = F(weekly(b), src, d, "HISTORICAL")
-    nmap = {y["d"]: y for y in nb}
+    f["weekly"] = F(weekly(b[-60:]), src, d, "HISTORICAL")
+    nmap = {y["d"]: y for y in nb[-80:]}
     if b[-21]["d"] in nmap and x["d"] in nmap:
         rs20 = (x["c"] / b[-21]["c"]) / (nmap[x["d"]]["c"] / nmap[b[-21]["d"]]["c"]) - 1
         rs60 = (x["c"] / b[-61]["c"]) / (nmap[x["d"]]["c"] / nmap[b[-61]["d"]]["c"]) - 1 if b[-61]["d"] in nmap else None
         f["relative_strength"] = F({"rs20_pct": rnd(100 * rs20), "rs60_pct": rnd(100 * rs60) if rs60 is not None else None},
-                                   src + " vs ^NSEI", d, "HISTORICAL")
+                                   src + " vs NIFTY", d, "HISTORICAL")
     else:
         f["relative_strength"] = NA("NIFTY bar missing for an aligned date")
-    reg = SW.regime_map(nb)
     f["nifty"] = F({"close": rnd(nb[-1]["c"]), "change_pct": rnd(100 * (nb[-1]["c"] / nb[-2]["c"] - 1)),
-                    "regime": reg.get(nb[-1]["d"]), "above_ema200": nb[-1]["c"] > nb[-1]["e200"]}, "Yahoo ^NSEI daily", nb[-1]["d"].isoformat(), "HISTORICAL")
-    f["sector"] = sector_strength(sym, asof)
+                    "regime": regime.get(nb[-1]["d"]), "above_ema200": nb[-1]["c"] > nb[-1]["e200"]}, "NIFTY daily", nb[-1]["d"].isoformat(), "HISTORICAL")
+    f["sector"] = sector_field
     after = asof + datetime.timedelta(days=1)
     f["delivery_prev"] = delivery(sym, after)
     f["futures_prev"] = futures(sym, after)

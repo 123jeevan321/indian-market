@@ -1,5 +1,28 @@
 {
  "note": "Untouched-test (final 20%) records per setup, written by validate.py in stage 5. Empty means no setup is validated, so the Judge returns NO TRADE.",
  "intraday": {},
- "swing": {}
+ "swing": {
+  "S_BRK20": {
+   "n": 595,
+   "expectancy": -38.8,
+   "ci_low": -126.0,
+   "ci_high": 48.4,
+   "win_net_pct": 46.9
+  },
+  "S_TREND": {
+   "n": 1568,
+   "expectancy": -212.0,
+   "ci_low": -300.6,
+   "ci_high": -123.3,
+   "win_net_pct": 40.3
+  },
+  "multi-factor": {
+   "n": 2435,
+   "expectancy": -268.7,
+   "ci_low": -340.6,
+   "ci_high": -196.8,
+   "win_net_pct": 37.8
+  }
+ },
+ "swing_note": "TEST period 2026-01-21..2026-11-09, Bonferroni z=2.39 over 3 setups; written 2026-11-12"
 }
