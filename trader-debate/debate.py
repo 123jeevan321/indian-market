@@ -3,7 +3,9 @@
 
     python trader-debate/debate.py run intraday BAJFINANCE [--now "2026-11-12 10:35"] [--no-angel]
     python trader-debate/debate.py run swing BHEL
-    python trader-debate/debate.py show trader/debates/2026-11-12/<file>.json
+    python trader-debate/debate.py show trader/debates/2026-11-12/<file>.json [--columns]
+    python trader-debate/debate.py history [--date 2026-11-12] [--symbol BAJFINANCE]
+    python trader-debate/debate.py reassess trader/debates/2026-11-12/<file>.json [--now "2026-11-12 11:30"]
 
 Records go to trader/debates/YYYY-MM-DD/ (git-ignored) and are never edited after they are written; a reassessment is a new record
 that names the earlier one in "reassesses".
@@ -93,6 +95,24 @@ def save(rec):
     return path
 
 
+def history(date=None, symbol=None):
+    """[(path, record)] oldest first, optionally filtered by IST date folder and symbol."""
+    out = []
+    if not os.path.isdir(OUT):
+        return out
+    for day in sorted(os.listdir(OUT)):
+        if date and day != date:
+            continue
+        for f in sorted(os.listdir(os.path.join(OUT, day))):
+            if not f.endswith(".json") or (symbol and not f.startswith(symbol.upper() + "-")):
+                continue
+            path = os.path.join(OUT, day, f)
+            with open(path, encoding="utf-8") as fh:
+                out.append((path, json.load(fh)))
+    out.sort(key=lambda x: (x[1]["snapshot"]["snapshot_time_ist"], x[0]))
+    return out
+
+
 def main(argv=None):
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -101,26 +121,37 @@ def main(argv=None):
     r = sub.add_parser("run")
     r.add_argument("mode", choices=["intraday", "swing"]); r.add_argument("symbol")
     r.add_argument("--now"); r.add_argument("--no-angel", action="store_true"); r.add_argument("--state")
-    s = sub.add_parser("show"); s.add_argument("path")
+    s = sub.add_parser("show"); s.add_argument("path"); s.add_argument("--columns", action="store_true")
+    h = sub.add_parser("history"); h.add_argument("--date"); h.add_argument("--symbol")
+    ra = sub.add_parser("reassess"); ra.add_argument("path"); ra.add_argument("--now"); ra.add_argument("--no-angel", action="store_true")
+    ra.add_argument("--state")
+    r.add_argument("--columns", action="store_true"); ra.add_argument("--columns", action="store_true")
     a = p.parse_args(argv)
+    import render
+    if a.cmd == "history":
+        print(render.history_table(history(a.date, a.symbol)))
+        return 0
     if a.cmd == "show":
         with open(a.path, encoding="utf-8") as fh:
             rec = json.load(fh)
     else:
-        sym = a.symbol.upper()
-        if a.mode == "intraday":
+        prev = None
+        if a.cmd == "reassess":
+            with open(a.path, encoding="utf-8") as fh:
+                prev = json.load(fh)                     # read only: the earlier record is never modified
+            mode, sym = prev["mode"], prev["symbol"]
+        else:
+            mode, sym = a.mode, a.symbol.upper()
+        if mode == "intraday":
             snap = SNAP.intraday(sym, datetime.datetime.strptime(a.now, "%Y-%m-%d %H:%M") if a.now else None, use_angel=not a.no_angel)
         else:
             snap = SNAP.swing(sym, datetime.date.fromisoformat(a.now[:10]) if a.now else None)
         state = json.load(open(a.state, encoding="utf-8")) if a.state else None
-        rec = run(snap, state=state)
+        rec = run(snap, state=state, reassesses=prev["id"] if prev else None)
         print("saved", save(rec))
-    try:
-        import render
-        print(render.render(rec))
-    except ImportError:
-        v = rec["messages"][-1]["content"]
-        print("%s %s %s -> %s: %s" % (rec["mode"], rec["symbol"], rec["snapshot"]["snapshot_time_ist"], v["decision"], v["why"]))
+        if prev:
+            print("reassessment of %s: %s -> %s" % (prev["id"], prev.get("decision"), rec["decision"]))
+    print(render.render(rec, columns=a.columns))
     return 0
 
 

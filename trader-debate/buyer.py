@@ -133,6 +133,8 @@ def respond(own_case, challenges, snapshot):
                         % own_case.get("confidence", {}).get("setup_reference")})
         elif cid.startswith("S4"):
             out.append({"to": cid, "concede": True, "text": "Conceded: the plan arithmetic fails as stated."})
+        elif cid == "S2b":
+            out.append({"to": cid, "concede": True, "text": "Conceded: the stock has already moved more than 2.5% today; the rule says no entry."})
         elif cid.startswith("S2"):
             out.append({"to": cid, "concede": True, "text": "Conceded: the entry is beyond 1.5 ATR(5m) from VWAP; the rule says no entry."})
         elif cid.startswith("S3"):
