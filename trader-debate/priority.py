@@ -295,8 +295,7 @@ def run(day=None, all_levels=False, limit=None):
     if live and market_open and now.time() < datetime.time(9, 30, 30):
         lines += ["## ⏳ WAIT: too early", "", "The intraday strategies (#1-#4, #8) are measured on the completed 09:15-09:30 bars. Run the scan after "
                   "09:31, and again after 09:46 for the volume follow-through check. Nothing is judged on incomplete bars."]
-        return "
-".join(lines), None
+        return "\n".join(lines), None
     found, evaluated = None, []
     ihits = None
     swing = None
