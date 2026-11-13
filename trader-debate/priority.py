@@ -183,7 +183,11 @@ TODAY_BAR = {}
 
 def swing_status(sym, p):
     """Swing levels 5-9: stop-width rule, then today's live bar against the buy-stop (entry above the signal-day high)."""
-    if p.get("qty") is None:
+    if p.get("qty") is None:                                  # level 10: buy at the open of the session after the signal
+        now = S.ist_now()
+        sig = p.get("signal_date")
+        if sig and now.date() > sig and now.weekday() < 5 and now.time() >= datetime.time(9, 15):
+            return "EXPIRED", "entry was today's 09:15 open; a new signal list comes after today's close"
         return "PENDING next open", "next-day entry at the open"
     stop_pct = 100 * (p["entry"] - p["stop"]) / p["entry"]
     if stop_pct > C.CONFIG["swing"]["max_stop_pct"]:
@@ -277,7 +281,7 @@ def swing_hits(data, asof):
             if ret20[s] > med(sec20[ind[s]]) and rs60 > 0 and med(sec5[ind[s]]) > 0.02 and 0 <= ret5[s] <= 0.05:
                 e = x["c"]
                 hits[10].append((s, x["rvol"], {"direction": "long", "entry": round(e, 2), "stop": C.tick(e * 0.99), "target1": C.tick(e * 1.02, up=True),
-                                                 "target2": None, "qty": None, "entry_kind": "buy at the next open (reference: last close)"}))
+                                                 "target2": None, "qty": None, "entry_kind": "buy at the next open (reference: last close)", "signal_date": x["d"]}))
     for k in hits:
         hits[k].sort(key=lambda h: -h[1])
     return hits
