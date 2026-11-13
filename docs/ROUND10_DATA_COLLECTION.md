@@ -42,7 +42,7 @@ Live test after hours (2026-11-12 00:29 IST, 3 symbols): connected, subscribed, 
 ## Running it each day
 
 Since 2026-11-12 the recorder is started by Windows Task Scheduler (user approved): task `IndiaEquity_OrderFlowRecorder`, Monday-Friday
-09:05, runs `scripts/run_recorder.bat`, allowed on battery, wakes the PC, starts late if 09:05 was missed, stops itself at 15:31.
+09:05, runs `scripts/run_recorder.pyw` with pythonw.exe (no console: the console launcher was killed by console-close signals on 13 Nov), allowed on battery, wakes the PC, starts late if 09:05 was missed, stops itself at 15:31.
 Log: `trader/ticks_r10/_task.log`. It runs only while you are logged in to Windows (credentials come from your user environment).
 On NSE holidays it connects and records nothing. Remove it with `schtasks /Delete /TN IndiaEquity_OrderFlowRecorder /F`.
 
