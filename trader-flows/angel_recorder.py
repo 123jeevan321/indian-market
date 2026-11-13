@@ -237,8 +237,8 @@ def cmd_record(a):
             api, sess = session(env)
             ws = SmartWebSocketV2(sess["data"]["jwtToken"], env["ANGEL_API_KEY"], env["ANGEL_CLIENT_CODE"], api.getfeedToken(),
                                   max_retry_attempt=3, retry_delay=5)
-        except SystemExit as e:
-            note("LOGIN FAILED (attempt %d): %s" % (attempts, e))
+        except (SystemExit, Exception) as e:            # network errors too: never let a failed re-login end the day's recording
+            note("LOGIN FAILED (attempt %d): %s: %s" % (attempts, type(e).__name__, str(e)[:120]))
             time.sleep(20)
             continue
 
