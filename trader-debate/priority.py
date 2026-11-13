@@ -75,9 +75,12 @@ def _days(doc):
     return out
 
 
-def opening_row(sym, day):
-    """09:15-09:30 facts for `day` (needs the three 5-minute bars), the previous close, 20-session volume baseline, 5-day return."""
+def opening_row(sym, day, now_ist=None):
+    """09:15-09:30 facts for `day` (needs the three 5-minute bars), the previous close, 20-session volume baseline, 5-day return.
+    Only bars that had ENDED by now_ist are used (Yahoo also returns the bar still forming)."""
     D = _days(S.LV.fetch(sym))
+    if now_ist is not None and day in D:
+        D[day] = {k: v for k, v in D[day].items() if datetime.datetime.combine(day, datetime.time(9, 15)) + datetime.timedelta(minutes=5 * k + 5) <= now_ist}
     if day not in D or not all(k in D[day] for k in range(3)):
         return None
     prev_days = sorted(d for d in D if d < day)
@@ -289,6 +292,11 @@ def run(day=None, all_levels=False, limit=None):
     market_open = now.weekday() < 5 and datetime.time(9, 15) <= now.time() <= datetime.time(15, 30)
     if live and not market_open:
         lines.append("Market is closed now (%s IST); intraday levels are evaluated on the latest session for reference only." % now.strftime("%H:%M"))
+    if live and market_open and now.time() < datetime.time(9, 30, 30):
+        lines += ["## ⏳ WAIT: too early", "", "The intraday strategies (#1-#4, #8) are measured on the completed 09:15-09:30 bars. Run the scan after "
+                  "09:31, and again after 09:46 for the volume follow-through check. Nothing is judged on incomplete bars."]
+        return "
+".join(lines), None
     found, evaluated = None, []
     ihits = None
     swing = None
@@ -296,7 +304,7 @@ def run(day=None, all_levels=False, limit=None):
         if level in INTRADAY_LEVELS:
             if ihits is None:
                 with cf.ThreadPoolExecutor(max_workers=4) as ex:
-                    rows = list(ex.map(lambda s: _safe(opening_row, s, day), syms))
+                    rows = list(ex.map(lambda s: _safe(opening_row, s, day, now), syms))
                 ihits = intraday_hits(rows)
                 ihits["_coverage"] = sum(1 for r in rows if r)
             rows = ihits[level]
