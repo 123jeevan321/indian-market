@@ -46,14 +46,27 @@ def ist_now():
 
 def tokens_for(symbols, cache="trader/cache/angel_master.json"):
     """NSE equity symbols -> {SYMBOL: token} from Angel's public instrument master (cached for a day)."""
-    fresh = os.path.exists(cache) and time.time() - os.path.getmtime(cache) < 86400
-    if not fresh:
+    def download():
         os.makedirs(os.path.dirname(cache), exist_ok=True)
         req = urllib.request.Request(MASTER_URL, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=60) as r, open(cache, "wb") as fh:
-            fh.write(r.read())
-    with open(cache, encoding="utf-8") as fh:
-        master = json.load(fh)
+        with urllib.request.urlopen(req, timeout=60) as r:
+            data = r.read()
+        json.loads(data)                                   # never cache a truncated or error answer
+        tmp = cache + ".tmp"
+        with open(tmp, "wb") as fh:
+            fh.write(data)
+        os.replace(tmp, cache)                             # atomic: a killed run cannot leave a half-written file
+
+    fresh = os.path.exists(cache) and os.path.getsize(cache) > 1000 and time.time() - os.path.getmtime(cache) < 86400
+    if not fresh:
+        download()
+    try:
+        with open(cache, encoding="utf-8") as fh:
+            master = json.load(fh)
+    except ValueError:                                     # damaged cache: fetch again once
+        download()
+        with open(cache, encoding="utf-8") as fh:
+            master = json.load(fh)
     want = {s.upper(): s.upper() + "-EQ" for s in symbols}
     found = {}
     for row in master:
