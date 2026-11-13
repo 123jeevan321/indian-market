@@ -178,6 +178,43 @@ def intraday_plan(r, side, now_ist, day):
 
 # ---------------------------------------------------------------- daily data (swing levels 5-7, 9 and next-day level 10)
 
+TODAY_BAR = {}
+
+
+def swing_status(sym, p):
+    """Swing levels 5-9: stop-width rule, then today's live bar against the buy-stop (entry above the signal-day high)."""
+    if p.get("qty") is None:
+        return "PENDING next open", "next-day entry at the open"
+    stop_pct = 100 * (p["entry"] - p["stop"]) / p["entry"]
+    if stop_pct > C.CONFIG["swing"]["max_stop_pct"]:
+        return "NOT VALID", "stop %.1f%% below entry exceeds the %.0f%% swing limit" % (stop_pct, C.CONFIG["swing"]["max_stop_pct"])
+    if not p.get("qty"):
+        return "NOT VALID", "position size is 0 within the Rs %d risk budget" % C.CONFIG["swing"]["risk_inr"]
+    t = TODAY_BAR.get(sym)
+    now = S.ist_now()
+    if not t and now.weekday() < 5 and now.time() >= datetime.time(9, 20):
+        try:                                                  # today's session so far from completed 5-minute bars
+            b = _days(S.LV.fetch(sym)).get(now.date(), {})
+            done = {k: v for k, v in b.items() if datetime.datetime.combine(now.date(), datetime.time(9, 15)) + datetime.timedelta(minutes=5 * k + 5) <= now}
+            if done:
+                t = {"o": done[min(done)][0], "h": max(v[1] for v in done.values()), "l": min(v[2] for v in done.values()), "c": done[max(done)][3]}
+                TODAY_BAR[sym] = t
+        except Exception:
+            t = None
+    if not t:
+        return "PENDING", "buy-stop for the next session; no live bar yet"
+    cap = p.get("do_not_enter_past") or p["entry"] * 1.003
+    if t["o"] > cap:
+        return "NOT VALID", "opened %.2f, past the do-not-chase price %.2f" % (t["o"], cap)
+    if t["l"] <= p["stop"] and t["h"] >= p["entry"]:
+        return "INVALIDATED", "triggered and stop traded today (low %.2f)" % t["l"]
+    if t["h"] >= p["entry"]:
+        if t["c"] > cap:
+            return "TRIGGERED, DO NOT CHASE", "buy-stop %.2f traded today; last %.2f is above the do-not-chase price %.2f" % (p["entry"], t["c"], cap)
+        return "TRIGGERED", "buy-stop %.2f traded today (high %.2f, last %.2f)" % (p["entry"], t["h"], t["c"])
+    return "PENDING", "not triggered yet: today's high %.2f is below the buy-stop %.2f (last %.2f)" % (t["h"], p["entry"], t["c"])
+
+
 def daily_bars(syms, asof):
     os.makedirs(DAILY_CACHE, exist_ok=True)
     fresh_after = datetime.datetime.combine(asof, datetime.time(15, 35)).timestamp() - 19800 + time.timezone * 0
@@ -192,7 +229,9 @@ def daily_bars(syms, asof):
             doc = S.SW.yahoo_daily(s)
             if doc:
                 json.dump(doc, open(p, "w", encoding="utf-8"))
-        b = [x for x in S.SW.bars_from(doc) if x["d"] <= asof] if doc else []
+        allb = S.SW.bars_from(doc) if doc else []
+        b = [x for x in allb if x["d"] <= asof]
+        TODAY_BAR[s] = next((x for x in allb if x["d"] > asof), None)      # the live session's bar so far (if any)
         return s, b
     with cf.ThreadPoolExecutor(max_workers=4) as ex:
         for s, b in ex.map(one, list(syms) + ["^NSEI"]):
@@ -258,7 +297,7 @@ def table(level, rows, kind):
             s, rv, p = r
             L.append("| %d | %s | %d | %s | ₹%.2f | ₹%.2f | ₹%.2f | %s | %s |" % (i, s, level, name, p["entry"], p["stop"], p["target1"],
                                                                           "1:%s" % p.get("net_rr_t1") if p.get("net_rr_t1") else "1:2.0 gross",
-                                                                          "PENDING next session"))
+                                                                          swing_status(s, p)[0]))
     return "\n".join(L)
 
 
@@ -274,8 +313,9 @@ def details(level, rows, kind):
                            p["entry"], p["stop"], p["target"], p["qty"], p["max_loss"], p["net_at_target"], p["costs_round_trip"], p["status"], p["status_why"], p["outcome_so_far"], r["last_bar"]))
         else:
             s, rv, p = r
-            out.append("- **%s**: signal-day volume %.1fx; %s; stop ₹%.2f; target ₹%.2f%s." % (
-                s, rv, p["entry_kind"], p["stop"], p["target1"], "; qty %s, max loss ₹%s, net at T1 ₹%s" % (p["qty"], p.get("max_loss_incl_costs"), p.get("net_at_t1")) if p.get("qty") else ""))
+            stt, why = swing_status(s, p)
+            out.append("- **%s**: signal-day volume %.1fx; %s; stop ₹%.2f; target ₹%.2f%s. Status: %s (%s)." % (
+                s, rv, p["entry_kind"], p["stop"], p["target1"], "; qty %s, max loss ₹%s, net at T1 ₹%s" % (p["qty"], p.get("max_loss_incl_costs"), p.get("net_at_t1")) if p.get("qty") else "", stt, why))
     return "\n".join(out)
 
 
@@ -318,7 +358,10 @@ def run(day=None, all_levels=False, limit=None):
                 swing = swing_hits(data, last)
                 swing["_asof"] = last
             rows, kind = swing[level], "swing"
-        live_rows = [r for r in rows if (r["plan"]["status"] if kind == "intraday" else "VALID").startswith(("VALID", "WAIT"))]
+        live_rows = [r for r in rows if (r["plan"]["status"] if kind == "intraday" else swing_status(r[0], r[2])[0]) in
+                     ("VALID", "VALID, R:R BELOW 1.5", "WAIT", "PENDING", "TRIGGERED", "PENDING next open")]
+        if kind == "swing":                                  # valid setups first in the table
+            rows.sort(key=lambda r: 0 if r in live_rows else 1)
         evaluated.append((level, len(rows), len(live_rows)))
         if rows:
             lines += ["## Priority %d: %s (%s), historical win rate %.1f%%, tested result %s" % (level, STRATEGIES[level][0], STRATEGIES[level][1],
