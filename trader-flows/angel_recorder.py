@@ -107,10 +107,26 @@ def credentials():
     return env
 
 
+def quiet_sdk_logs():
+    """The SmartApi SDK logs FULL request headers (API key + bearer token) on any request error, to stderr and to logs/<date>/app.log.
+    Silence it: our own code reports errors without secrets."""
+    import logging
+    try:
+        import logzero
+        logzero.logfile(None)
+        logzero.loglevel(logging.CRITICAL + 10)
+        logzero.logger.disabled = True
+    except ImportError:
+        pass
+    for name in ("SmartApi", "SmartApi.smartConnect", "SmartApi.smartWebSocketV2"):
+        logging.getLogger(name).setLevel(logging.CRITICAL + 10)
+
+
 def session(env):
     import pyotp
     from SmartApi import SmartConnect
     api = SmartConnect(env["ANGEL_API_KEY"])
+    quiet_sdk_logs()                                   # after construction: SmartConnect() re-attaches its log file
     sess = api.generateSession(env["ANGEL_CLIENT_CODE"], env["ANGEL_PIN"], pyotp.TOTP(env["ANGEL_TOTP_SECRET"].replace(" ", "")).now())
     if not sess or not sess.get("status"):
         raise SystemExit("Angel One login FAILED: %s (errorcode %s)" % ((sess or {}).get("message") or "no answer",
